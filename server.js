@@ -137,6 +137,16 @@ app.post('/api/judges', (req, res) => {
   res.json({ id, name, email, division, tempPassword: judges[id].password });
 });
 
+app.delete('/api/judges/:id', (req, res) => {
+  const id = req.params.id;
+  if (judges[id]) {
+    delete judges[id];
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Judge not found' });
+  }
+});
+
 app.post('/api/judges/login', (req, res) => {
   const { email, password } = req.body;
   const judge = Object.values(judges).find(j => j.email === email && j.password === password);

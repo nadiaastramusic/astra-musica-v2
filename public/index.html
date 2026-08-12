@@ -237,7 +237,7 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Division</th><th>Status</th><th>Password</th><th>Scores</th></tr></thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Division</th><th>Status</th><th>Password</th><th>Scores</th><th>Action</th></tr></thead>
           <tbody id="judgesTable"></tbody>
         </table>
       </div>
@@ -275,10 +275,29 @@
         <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">🎨 Logo</h3>
         <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">Replace the "AM" placeholder with your Astra Musica logo.</p>
         <div class="form-group">
-          <label>Logo URL (or upload to Firebase Storage and paste link)</label>
+          <label>Option 1: Paste Logo URL</label>
           <input type="url" id="logoUrl" placeholder="https://firebasestorage.../logo.png">
         </div>
-        <button class="btn btn-primary" onclick="updateLogo()">Update Logo</button>
+        <button class="btn btn-primary" onclick="updateLogo()" style="margin-bottom:16px;">Update from URL</button>
+        <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:16px;">
+          <label style="display:block;font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);margin-bottom:8px;">Option 2: Upload Logo File</label>
+          <input type="file" id="logoFileInput" accept="image/*" style="margin-bottom:10px;">
+          <button class="btn btn-gold" onclick="uploadLogoToFirebase()">Upload Logo</button>
+          <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:8px;">The logo will update immediately. For permanent storage across sessions, use Firebase Storage (see README).</p>
+        </div>
+      </div>
+
+      <div class="card mt-2" style="max-width:500px;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">🔥 Firebase Storage Setup</h3>
+        <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">To make images permanent, connect your Firebase project:</p>
+        <ol style="font-size:13px;color:rgba(255,255,255,0.5);margin-left:20px;margin-bottom:12px;line-height:1.8;">
+          <li>Go to <a href="https://console.firebase.google.com" target="_blank" style="color:var(--brand-gold);">Firebase Console</a></li>
+          <li>Select your project → Storage → Get Started</li>
+          <li>Set rules to allow reads: <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">allow read;</code></li>
+          <li>Upload your logo → Copy the download URL</li>
+          <li>Paste the URL in "Logo URL" field above</li>
+        </ol>
+        <p style="font-size:12px;color:rgba(255,255,255,0.4);">For now, uploaded images work for the current session. They reset when the server restarts.</p>
       </div>
     </div>
   </div>

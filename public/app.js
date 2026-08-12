@@ -185,7 +185,7 @@ function renderJudgePanel() {
           ${sub.entryType === 'challenge' ? '<span class="challenge-badge">Challenge</span>' : ''}
         </div>
         ${sub.image ? `<img src="${sub.image}" class="submission-img" style="margin-top:10px;max-width:200px;">` : ''}
-        <a href="${sub.link}" target="_blank" class="link-btn">🔗 Open ${sub.linkType || 'link'}</a>
+        <a href="${sub.link}" target="_blank" class="link-btn" style="font-size:14px;padding:8px 16px;">▶️ Play Song — ${sub.linkType || 'link'}</a>
         <div class="criteria-grid">
           <div class="criterion"><label>Vocals</label><input type="number" min="0" max="10" value="${c[0]}" id="c1-${sub.id}" onchange="updateScore(${sub.id})"></div>
           <div class="criterion"><label>Production</label><input type="number" min="0" max="10" value="${c[1]}" id="c2-${sub.id}" onchange="updateScore(${sub.id})"></div>
@@ -262,7 +262,7 @@ function renderTop20() {
           <div class="rank-num ${idx < 3 ? 'top3' : ''}">${idx + 1}</div>
           ${sub.image ? `<img src="${sub.image}" class="submission-img">` : ''}
           <div>
-            <div style="font-weight:600;font-size:15px;">${sub.title}</div>
+            <a href="${sub.link}" target="_blank" style="font-weight:600;font-size:15px;color:white;text-decoration:none;">${sub.title}</a>
             <div style="font-size:12px;color:rgba(255,255,255,0.4);">by ${sub.author}</div>
           </div>
         </div>
@@ -314,7 +314,7 @@ function renderChallenges() {
         </div>
         <div class="tags">${sub.tags.map(t => `<span class="tag ${t}">#${t}</span>`).join('')}</div>
         ${sub.image ? `<img src="${sub.image}" class="submission-img" style="margin-top:10px;">` : ''}
-        <a href="${sub.link}" target="_blank" class="link-btn">🔗 Open ${sub.linkType || 'link'}</a>
+        <a href="${sub.link}" target="_blank" class="link-btn" style="font-size:14px;padding:8px 16px;">▶️ Play Song — ${sub.linkType || 'link'}</a>
       </div>
     `).join('');
   });
@@ -349,7 +349,7 @@ function renderResults() {
           <div class="rank-num">${idx + 4}</div>
           ${sub.image ? `<img src="${sub.image}" class="submission-img">` : ''}
           <div>
-            <div style="font-weight:600;font-size:15px;">${sub.title}</div>
+            <a href="${sub.link}" target="_blank" style="font-weight:600;font-size:15px;color:white;text-decoration:none;">${sub.title}</a>
             <div style="font-size:12px;color:rgba(255,255,255,0.4);">by ${sub.author}</div>
           </div>
         </div>
@@ -451,6 +451,7 @@ async function renderAdminJudges() {
         <td><span class="status-dot active"></span>Active</td>
         <td>${j.hasSetPassword ? '✓ Custom' : 'Default'}</td>
         <td>${scoreCount} / ${totalSubs}</td>
+        <td><button onclick="deleteJudge('${id}')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;" title="Remove judge">🗑️</button></td>
       </tr>
     `;
   }).join('');
@@ -466,6 +467,14 @@ async function addJudge() {
   toast(`Judge added! Temp password: ${res.tempPassword}`);
   $('newJudgeName').value = ''; $('newJudgeEmail').value = '';
   renderAdminJudges();
+}
+
+async function deleteJudge(id) {
+  if (!confirm('Remove this judge? They will no longer be able to log in.')) return;
+  await apiDelete('/api/judges/' + id);
+  await loadData();
+  renderAdminJudges();
+  toast('Judge removed');
 }
 
 function renderAdminResults() {
@@ -583,3 +592,30 @@ async function init() {
   handleImageUpload('challengeImg', 'challengeImgPreview');
 }
 init();
+
+// ===== FIREBASE LOGO UPLOAD HELPER =====
+// Paste your Firebase config here:
+const FIREBASE_CONFIG = {
+  apiKey: 'YOUR_API_KEY',
+  authDomain: 'YOUR_PROJECT.firebaseapp.com',
+  projectId: 'YOUR_PROJECT',
+  storageBucket: 'YOUR_PROJECT.appspot.com'
+};
+
+async function uploadLogoToFirebase() {
+  const fileInput = document.getElementById('logoFileInput');
+  const file = fileInput.files[0];
+  if (!file) { toast('Select a logo image first', 'error'); return; }
+
+  // For now, use base64 preview. In production, upload to Firebase Storage.
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const box = document.getElementById('logoBox');
+    box.innerHTML = '<img src="' + e.target.result + '" alt="Astra Musica" style="width:44px;height:44px;object-fit:contain;">';
+    box.style.background = 'transparent';
+    box.style.border = 'none';
+    box.style.boxShadow = 'none';
+    toast('Logo updated! (For permanent storage, upload to Firebase Storage and paste the URL in Settings)');
+  };
+  reader.readAsDataURL(file);
+}
