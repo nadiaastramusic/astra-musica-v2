@@ -131,10 +131,13 @@ app.get('/api/judges', (req, res) => {
 });
 
 app.post('/api/judges', (req, res) => {
-  const { name, email, division } = req.body;
+  const { name, email, division, password } = req.body;
+  if (!name || !email || !division || !password) {
+    return res.status(400).json({ error: 'Name, email, division, and password are required' });
+  }
   const id = 'judge' + (Object.keys(judges).length + 1);
-  judges[id] = { name, email, division, password: Math.random().toString(36).slice(2, 8), hasSetPassword: false };
-  res.json({ id, name, email, division, tempPassword: judges[id].password });
+  judges[id] = { name, email, division, password, hasSetPassword: false };
+  res.json({ id, name, email, division });
 });
 
 app.delete('/api/judges/:id', (req, res) => {

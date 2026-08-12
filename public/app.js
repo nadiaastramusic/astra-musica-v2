@@ -449,7 +449,7 @@ async function renderAdminJudges() {
         <td>${j.email}</td>
         <td><span class="tag ${j.division}" style="font-size:11px;">${divisions[j.division].name}</span></td>
         <td><span class="status-dot active"></span>Active</td>
-        <td>${j.hasSetPassword ? '✓ Custom' : 'Default'}</td>
+        <td>${j.hasSetPassword ? '✓ Changed' : 'Admin Set'}</td>
         <td>${scoreCount} / ${totalSubs}</td>
         <td><button onclick="deleteJudge('${id}')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;" title="Remove judge">🗑️</button></td>
       </tr>
@@ -461,11 +461,13 @@ async function addJudge() {
   const name = $('newJudgeName').value.trim();
   const email = $('newJudgeEmail').value.trim();
   const division = $('newJudgeDivision').value;
-  if (!name || !email || !division) { toast('Fill all fields', 'error'); return; }
+  const password = $('newJudgePassword').value;
+  if (!name || !email || !division || !password) { toast('Fill all fields including password', 'error'); return; }
 
-  const res = await apiPost('/api/judges', { name, email, division });
-  toast(`Judge added! Temp password: ${res.tempPassword}`);
-  $('newJudgeName').value = ''; $('newJudgeEmail').value = '';
+  const res = await apiPost('/api/judges', { name, email, division, password });
+  if (res.error) { toast(res.error, 'error'); return; }
+  toast(`Judge ${name} added! They can log in with ${email} and the password you set.`);
+  $('newJudgeName').value = ''; $('newJudgeEmail').value = ''; $('newJudgePassword').value = '';
   renderAdminJudges();
 }
 
