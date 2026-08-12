@@ -11,6 +11,7 @@ const divisions = {
 // ===================== STATE =====================
 let currentRole = null;
 let currentJudge = null;
+let adminLoggedIn = false;
 let submissions = [];
 let scores = {};
 let resultsRevealed = false;
@@ -112,9 +113,15 @@ function selectRole(role) {
   currentRole = role;
   if (role === 'admin') {
     setBodyClass('main-page');
-    $('headerBadge').innerHTML = '<span class="badge">Admin</span>';
-    showScreen('screenAdmin');
-    setAdminTab('submissions');
+    if (adminLoggedIn) {
+      $('headerBadge').innerHTML = '<span class="badge">Admin</span>';
+      showScreen('screenAdmin');
+      setAdminTab('submissions');
+    } else {
+      showScreen('screenAdminLogin');
+      $('adminPassword').value = '';
+      setTimeout(() => $('adminPassword').focus(), 100);
+    }
   } else if (role === 'judge') {
     setBodyClass('main-page');
     $('headerBadge').innerHTML = '';
@@ -131,7 +138,7 @@ function selectRole(role) {
 }
 
 function goBack() {
-  currentRole = null; currentJudge = null;
+  currentRole = null; currentJudge = null; adminLoggedIn = false;
   $('headerBadge').innerHTML = '';
   setBodyClass('main-page');
   showScreen('screenRole');
@@ -154,6 +161,41 @@ async function loginJudge() {
     renderJudgePanel();
   } catch (e) {
     $('loginError').style.display = 'block';
+  }
+}
+
+async function loginAdmin() {
+  const pw = $('adminPassword').value;
+  try {
+    const res = await apiPost('/api/admin/login', { password: pw });
+    if (res.error) throw new Error(res.error);
+    adminLoggedIn = true;
+    $('headerBadge').innerHTML = '<span class="badge">Admin</span>';
+    showScreen('screenAdmin');
+    setAdminTab('submissions');
+  } catch (e) {
+    $('adminLoginError').style.display = 'block';
+  }
+}
+
+async function changeAdminPassword() {
+  const oldPw = $('adminOldPassword').value;
+  const newPw = $('adminNewPassword').value;
+  const confirmPw = $('adminConfirmPassword').value;
+
+  if (!oldPw || !newPw) { toast('Fill all fields', 'error'); return; }
+  if (newPw !== confirmPw) { toast('New passwords do not match', 'error'); return; }
+  if (newPw.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+
+  try {
+    const res = await apiPost('/api/admin/change-password', { oldPassword: oldPw, newPassword: newPw });
+    if (res.error) throw new Error(res.error);
+    toast('Admin password changed!');
+    $('adminOldPassword').value = '';
+    $('adminNewPassword').value = '';
+    $('adminConfirmPassword').value = '';
+  } catch (e) {
+    toast('Incorrect current password', 'error');
   }
 }
 

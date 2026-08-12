@@ -45,6 +45,22 @@
     </div>
   </div>
 
+  <!-- SCREEN: Admin Login -->
+  <div id="screenAdminLogin" class="screen hidden">
+    <button class="back-btn" onclick="goBack()">← Back</button>
+    <div class="login-box">
+      <h2>🔒 Admin Access</h2>
+      <p class="hint">Enter the admin password to manage the competition</p>
+      <div class="form-group">
+        <label>Admin Password</label>
+        <input type="password" id="adminPassword" placeholder="Enter admin password" onkeypress="if(event.key==='Enter')loginAdmin()">
+      </div>
+      <button class="btn btn-primary" onclick="loginAdmin()">Unlock Admin Panel</button>
+      <p id="adminLoginError" style="color:#ff6b6b;font-size:13px;text-align:center;margin-top:12px;display:none;">Incorrect password.</p>
+      <p style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center;margin-top:16px;">Default: <code style="background:rgba(0,0,0,0.3);padding:2px 8px;border-radius:4px;">astra2026</code></p>
+    </div>
+  </div>
+
   <!-- SCREEN: Judge Login -->
   <div id="screenJudgeLogin" class="screen hidden">
     <button class="back-btn" onclick="goBack()">← Back</button>
@@ -267,7 +283,25 @@
 
     <!-- Admin: Settings -->
     <div id="adminSettings" class="hidden">
-      <div class="card" style="max-width:500px; border:2px solid #ff6b6b;">
+      <div class="card" style="max-width:500px; border:2px solid var(--brand-gold);">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">🔐 Change Admin Password</h3>
+        <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;">Change the password required to access this admin panel.</p>
+        <div class="form-group">
+          <label>Current Password</label>
+          <input type="password" id="adminOldPassword" placeholder="Current password">
+        </div>
+        <div class="form-group">
+          <label>New Password</label>
+          <input type="password" id="adminNewPassword" placeholder="New password (min 6 chars)">
+        </div>
+        <div class="form-group">
+          <label>Confirm New Password</label>
+          <input type="password" id="adminConfirmPassword" placeholder="Confirm new password">
+        </div>
+        <button class="btn btn-gold" onclick="changeAdminPassword()">Update Password</button>
+      </div>
+
+      <div class="card mt-2" style="max-width:500px; border:2px solid #ff6b6b;">
         <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:#ff6b6b;">⚠️ Reset Week</h3>
         <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;">This will delete ALL submissions and scores and start a fresh week. This action cannot be undone.</p>
         <button class="btn btn-danger" onclick="resetWeek()">Reset for New Week</button>

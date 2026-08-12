@@ -21,6 +21,9 @@ const divisions = {
   liveartists: { name: 'Live Artists', color: '#008080', bg: 'linear-gradient(135deg, #0a1a1a 0%, #0a2d2d 50%, #0a1a1a 100%)', accent: '#008080' }
 };
 
+// ===================== ADMIN =====================
+let adminPassword = process.env.ADMIN_PASSWORD || 'astra2026';
+
 // ===================== JUDGES (admin-managed) =====================
 let judges = {
   judge1: { name: 'Sarah M.', email: 'sarah@example.com', division: 'english', password: 'judge1', hasSetPassword: false },
@@ -233,6 +236,25 @@ app.get('/api/export/:weekId', (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="astra-musica-${weekId}.xlsx"`);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.send(buf);
+});
+
+// Admin auth
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (password === adminPassword) {
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ error: 'Invalid admin password' });
+  }
+});
+
+app.post('/api/admin/change-password', (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (oldPassword !== adminPassword) {
+    return res.status(401).json({ error: 'Incorrect current password' });
+  }
+  adminPassword = newPassword;
+  res.json({ success: true });
 });
 
 // Facebook polling
