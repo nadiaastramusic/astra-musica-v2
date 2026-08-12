@@ -35,6 +35,7 @@ const divisions = {
 
 // ===================== IN-MEMORY CACHE =====================
 let adminPassword = 'astra2026';
+let appLogo = '';
 let judges = {};
 let submissions = [];
 let scores = {};
@@ -77,6 +78,8 @@ async function loadFromDB() {
       currentWeekId = settings.currentWeekId || currentWeekId;
       nextId = settings.nextId || 1;
     }
+    const logoDoc = await db.collection('settings').findOne({ _id: 'logo' });
+    if (logoDoc) appLogo = logoDoc.url || '';
 
     const judgesDoc = await db.collection('judges').findOne({ _id: 'all' });
     if (judgesDoc) judges = judgesDoc.data || {};
@@ -379,6 +382,22 @@ app.get('/api/export/:weekId', (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="astra-musica-${weekId}.xlsx"`);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.send(buf);
+});
+
+// Logo endpoints
+app.get('/api/logo', (req, res) => res.json({ url: appLogo }));
+
+app.post('/api/logo', async (req, res) => {
+  const { url } = req.body;
+  appLogo = url;
+  if (db) {
+    await db.collection('settings').updateOne(
+      { _id: 'logo' },
+      { $set: { url } },
+      { upsert: true }
+    );
+  }
+  res.json({ success: true, url });
 });
 
 // Facebook polling

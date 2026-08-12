@@ -731,6 +731,7 @@ async function uploadChallengeImage() {
 // ===================== INIT =====================
 async function init() {
   await loadData();
+  await loadLogo();
   setBodyClass('main-page');
   showScreen('screenRole');
   updateCountdown();
@@ -738,6 +739,52 @@ async function init() {
   handleImageUpload('challengeImg', 'challengeImgPreview');
 }
 init();
+
+async function loadLogo() {
+  try {
+    const res = await apiGet('/api/logo');
+    if (res.url) applyLogo(res.url);
+  } catch (e) {}
+}
+
+function applyLogo(url) {
+  const box = document.getElementById('logoBox');
+  if (!box) return;
+  if (url) {
+    box.innerHTML = '<img src="' + url + '" alt="Astra Musica" style="width:44px;height:44px;object-fit:contain;border-radius:10px;">';
+    box.style.background = 'transparent';
+    box.style.border = 'none';
+    box.style.boxShadow = 'none';
+  } else {
+    box.innerHTML = 'AM';
+    box.style.background = 'linear-gradient(135deg, var(--brand-blue), #2a4fc7)';
+    box.style.border = '2px solid rgba(212,175,55,0.3)';
+    box.style.boxShadow = '0 0 20px rgba(65,105,225,0.3)';
+  }
+}
+
+async function updateLogo() {
+  const url = document.getElementById('logoUrl').value.trim();
+  if (!url) return;
+  await apiPost('/api/logo', { url });
+  applyLogo(url);
+  toast('Logo saved! It will appear for everyone.');
+}
+
+async function uploadLogoToFirebase() {
+  const fileInput = document.getElementById('logoFileInput');
+  const file = fileInput.files[0];
+  if (!file) { toast('Select a logo image first', 'error'); return; }
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const base64 = e.target.result;
+    await apiPost('/api/logo', { url: base64 });
+    applyLogo(base64);
+    toast('Logo saved! (For smaller file size, use a URL instead of upload)');
+  };
+  reader.readAsDataURL(file);
+}
 
 // ===== FIREBASE LOGO UPLOAD HELPER =====
 // Paste your Firebase config here:

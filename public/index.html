@@ -338,18 +338,6 @@
   </div>
 </div>
 
-<script>
-function updateLogo() {
-  const url = document.getElementById('logoUrl').value.trim();
-  if (!url) return;
-  const box = document.getElementById('logoBox');
-  box.innerHTML = '<img src="' + url + '" alt="Astra Musica" style="width:44px;height:44px;object-fit:contain;">';
-  box.style.background = 'transparent';
-  box.style.border = 'none';
-  box.style.boxShadow = 'none';
-  toast('Logo updated!');
-}
-</script>
 <script src="app.js"></script>
 </body>
 </html>
