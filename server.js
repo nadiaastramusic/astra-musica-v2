@@ -47,7 +47,15 @@ let submissions = [
   { id: 11, weekId: '2026-W33', author: 'Mike R.', title: 'Live at the Arena', tags: ['liveartists'], link: 'https://youtube.com/watch?v=live1', linkType: 'youtube', entryType: 'top20', challengeDivision: null, image: null, timestamp: '2026-08-11T17:00' }
 ];
 
-let scores = {};
+let scores = {
+  1: { 'Sarah M.': { criteria: [8, 7, 9, 8], total: 80 }, 'Pieter K.': { criteria: [7, 8, 8, 7], total: 75 } },
+  2: { 'Sarah M.': { criteria: [9, 8, 8, 9], total: 85 } },
+  4: { 'Pieter K.': { criteria: [8, 9, 7, 8], total: 80 } },
+  5: { 'Rebecca L.': { criteria: [7, 7, 8, 7], total: 73 } },
+  8: { 'Rebecca L.': { criteria: [9, 9, 9, 8], total: 88 } },
+  10: { 'David N.': { criteria: [8, 8, 7, 9], total: 80 } },
+  11: { 'David N.': { criteria: [9, 8, 8, 9], total: 85 } }
+};
 let resultsRevealed = false;
 let revealTime = new Date('2026-08-14T20:00:00').getTime();
 let nextId = 12;

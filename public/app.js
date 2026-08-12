@@ -204,7 +204,7 @@ function renderJudgePanel() {
   const divSubs = getSubsForDivision(currentJudge.division);
 
   if (divSubs.length === 0) {
-    container.innerHTML = '<p class="text-center text-tertiary" style="padding:40px;">No submissions yet for this division.</p>';
+    container.innerHTML = '<p class="text-center text-tertiary" style="padding:40px;font-size:16px;">No submissions yet for this division.</p>';
     return;
   }
 
@@ -213,52 +213,139 @@ function renderJudgePanel() {
     const isScored = !!myScore;
     const c = myScore ? myScore.criteria : [0,0,0,0];
     const divColor = divisions[currentJudge.division].color;
+    const total = isScored ? myScore.total : Math.round(((c[0]+c[1]+c[2]+c[3])/40)*100);
+
     return `
-      <div class="card" style="border-left: 4px solid ${divColor};">
+      <div class="card" style="border-left: 4px solid ${divColor};" id="song-card-${sub.id}">
         <div class="card-header">
           <div>
-            <div class="card-title">${sub.title}</div>
-            <div class="card-meta">by ${sub.author} · ${formatDate(sub.timestamp)}</div>
+            <div class="card-title" style="font-size:18px;">${sub.title}</div>
+            <div class="card-meta" style="font-size:14px;">by ${sub.author} · ${formatDate(sub.timestamp)}</div>
           </div>
-          ${isScored ? '<span style="font-size:12px;color:#6bff6b;font-weight:700;">✓ Scored</span>' : ''}
+          ${isScored ? `<span style="font-size:13px;color:#6bff6b;font-weight:700;background:rgba(107,255,107,0.1);padding:4px 12px;border-radius:20px;">✓ Scored ${myScore.total}%</span>` : '<span style="font-size:13px;color:var(--brand-gold);font-weight:700;background:rgba(212,175,55,0.1);padding:4px 12px;border-radius:20px;">Not Scored</span>'}
         </div>
         <div class="tags">
           ${sub.tags.map(t => `<span class="tag ${t}">#${t}</span>`).join('')}
           ${sub.entryType === 'challenge' ? '<span class="challenge-badge">Challenge</span>' : ''}
         </div>
         ${sub.image ? `<img src="${sub.image}" class="submission-img" style="margin-top:10px;max-width:200px;">` : ''}
-        <a href="${sub.link}" target="_blank" class="link-btn" style="font-size:14px;padding:8px 16px;">▶️ Play Song — ${sub.linkType || 'link'}</a>
-        <div class="criteria-grid">
-          <div class="criterion"><label>Vocals</label><input type="number" min="0" max="10" value="${c[0]}" id="c1-${sub.id}" onchange="updateScore(${sub.id})"></div>
-          <div class="criterion"><label>Production</label><input type="number" min="0" max="10" value="${c[1]}" id="c2-${sub.id}" onchange="updateScore(${sub.id})"></div>
-          <div class="criterion"><label>Originality</label><input type="number" min="0" max="10" value="${c[2]}" id="c3-${sub.id}" onchange="updateScore(${sub.id})"></div>
-          <div class="criterion"><label>Impact</label><input type="number" min="0" max="10" value="${c[3]}" id="c4-${sub.id}" onchange="updateScore(${sub.id})"></div>
+        <a href="${sub.link}" target="_blank" class="link-btn" style="font-size:14px;padding:10px 18px;margin-top:12px;">▶️ Play Song</a>
+
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">
+          <p style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.8);margin-bottom:14px;">Score this song (0-10 each):</p>
+          <div class="criteria-grid">
+            <div class="criterion">
+              <label style="font-size:13px;">Vocals</label>
+              <div class="score-control">
+                <button class="score-btn" onclick="adjustScore(${sub.id}, 'vocals', -1)">−</button>
+                <span class="score-value" id="val-vocals-${sub.id}">${c[0]}</span>
+                <button class="score-btn" onclick="adjustScore(${sub.id}, 'vocals', 1)">+</button>
+              </div>
+            </div>
+            <div class="criterion">
+              <label style="font-size:13px;">Production</label>
+              <div class="score-control">
+                <button class="score-btn" onclick="adjustScore(${sub.id}, 'production', -1)">−</button>
+                <span class="score-value" id="val-production-${sub.id}">${c[1]}</span>
+                <button class="score-btn" onclick="adjustScore(${sub.id}, 'production', 1)">+</button>
+              </div>
+            </div>
+            <div class="criterion">
+              <label style="font-size:13px;">Originality</label>
+              <div class="score-control">
+                <button class="score-btn" onclick="adjustScore(${sub.id}, 'originality', -1)">−</button>
+                <span class="score-value" id="val-originality-${sub.id}">${c[2]}</span>
+                <button class="score-btn" onclick="adjustScore(${sub.id}, 'originality', 1)">+</button>
+              </div>
+            </div>
+            <div class="criterion">
+              <label style="font-size:13px;">Impact</label>
+              <div class="score-control">
+                <button class="score-btn" onclick="adjustScore(${sub.id}, 'impact', -1)">−</button>
+                <span class="score-value" id="val-impact-${sub.id}">${c[3]}</span>
+                <button class="score-btn" onclick="adjustScore(${sub.id}, 'impact', 1)">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="score-display" style="margin-top:16px;">
+            <span class="label" style="font-size:15px;">Current Total</span>
+            <span class="value" id="display-total-${sub.id}" style="font-size:36px;">${total}%</span>
+          </div>
+
+          ${isScored 
+            ? `<button class="score-edit-btn" onclick="enableEdit(${sub.id})">✏️ Edit My Score</button>`
+            : `<button class="save-score-btn" id="save-btn-${sub.id}" onclick="saveScore(${sub.id})">💾 Save My Score</button>`
+          }
+
+          <p style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:10px;">
+            ${isScored ? '✓ Your score is saved. Other judges cannot see it.' : 'Adjust all 4 criteria, then click Save.'}
+          </p>
         </div>
-        <div class="score-display">
-          <span class="label">Total Score</span>
-          <span class="value" id="total-${sub.id}">${isScored ? myScore.total + '%' : '—'}</span>
-        </div>
-        ${isScored ? '<p style="font-size:12px;color:#6bff6b;margin-top:8px;">✓ Your score is saved and hidden from other judges.</p>' : ''}
       </div>
     `;
   }).join('');
 }
 
-async function updateScore(subId) {
-  const c1 = parseFloat($(`c1-${subId}`).value) || 0;
-  const c2 = parseFloat($(`c2-${subId}`).value) || 0;
-  const c3 = parseFloat($(`c3-${subId}`).value) || 0;
-  const c4 = parseFloat($(`c4-${subId}`).value) || 0;
+// In-memory score tracking while editing
+let editingScores = {};
+
+function adjustScore(subId, criterion, delta) {
+  const criteriaMap = { 'vocals': 0, 'production': 1, 'originality': 2, 'impact': 3 };
+  const idx = criteriaMap[criterion];
+
+  if (!editingScores[subId]) {
+    const myScore = scores[subId]?.[currentJudge.name];
+    editingScores[subId] = myScore ? [...myScore.criteria] : [0, 0, 0, 0];
+  }
+
+  editingScores[subId][idx] = Math.max(0, Math.min(10, editingScores[subId][idx] + delta));
+
+  $(`val-${criterion}-${subId}`).textContent = editingScores[subId][idx];
+
+  const sum = editingScores[subId].reduce((a, b) => a + b, 0);
+  const pct = Math.round((sum / 40) * 100);
+  $(`display-total-${subId}`).textContent = pct + '%';
+}
+
+function enableEdit(subId) {
+  const myScore = scores[subId]?.[currentJudge.name];
+  if (!myScore) return;
+  editingScores[subId] = [...myScore.criteria];
+
+  const card = $(`song-card-${subId}`);
+  const btnArea = card.querySelector('.score-edit-btn').parentNode;
+  card.querySelector('.score-edit-btn').remove();
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'save-score-btn';
+  saveBtn.id = `save-btn-${subId}`;
+  saveBtn.textContent = '💾 Update My Score';
+  saveBtn.onclick = () => saveScore(subId);
+  btnArea.appendChild(saveBtn);
+
+  toast('You can now edit your score. Click Update when done.');
+}
+
+async function saveScore(subId) {
+  const c = editingScores[subId] || [0, 0, 0, 0];
+  const sum = c.reduce((a, b) => a + b, 0);
+
+  if (sum === 0) {
+    toast('Please score at least one criterion before saving.', 'error');
+    return;
+  }
 
   await apiPost('/api/scores', {
     submissionId: subId,
     judgeName: currentJudge.name,
-    criteria: [c1,c2,c3,c4]
+    criteria: c
   });
 
   scores = await apiGet('/api/scores');
+  delete editingScores[subId];
   renderJudgePanel();
-  toast('Score saved!');
+  toast('Score saved! Other judges cannot see it.');
 }
 
 // ===================== PUBLIC =====================
@@ -270,6 +357,13 @@ function setPublicTab(tab) {
   hide('publicTop20'); hide('publicChallenges'); hide('publicResults');
   show('public' + (tab === 'top20' ? 'Top20' : tab === 'challenges' ? 'Challenges' : 'Results'));
 
+  // Reset background when switching tabs
+  if (publicDivFilter === 'all') {
+    setBodyClass('main-page');
+  } else {
+    setBodyClass('div-' + publicDivFilter);
+  }
+
   if (tab === 'top20') renderTop20();
   if (tab === 'challenges') renderChallenges();
   if (tab === 'results') renderResults();
@@ -279,6 +373,14 @@ function setPublicDiv(div) {
   publicDivFilter = div;
   document.querySelectorAll('#publicDivTabs .div-tab').forEach(b => b.classList.remove('active'));
   event.target.classList.add('active');
+
+  // Change background to division color
+  if (div === 'all') {
+    setBodyClass('main-page');
+  } else {
+    setBodyClass('div-' + div);
+  }
+
   if (publicTab === 'top20') renderTop20();
 }
 
@@ -304,14 +406,14 @@ function renderTop20() {
           <div class="rank-num ${idx < 3 ? 'top3' : ''}">${idx + 1}</div>
           ${sub.image ? `<img src="${sub.image}" class="submission-img">` : ''}
           <div>
-            <a href="${sub.link}" target="_blank" style="font-weight:600;font-size:15px;color:white;text-decoration:none;">${sub.title}</a>
-            <div style="font-size:12px;color:rgba(255,255,255,0.4);">by ${sub.author}</div>
+            <a href="${sub.link}" target="_blank" style="font-weight:700;font-size:16px;color:white;text-decoration:none;display:block;margin-bottom:4px;">${sub.title}</a>
+            <div style="font-size:14px;color:rgba(255,255,255,0.7);">by ${sub.author}</div>
           </div>
         </div>
         <div style="text-align:right;">
-          <div style="font-weight:700;font-size:16px;">${sub.avg ? sub.avg + '%' : 'Pending'}</div>
-          <div class="tags" style="justify-content:flex-end;margin-top:4px;">
-            ${sub.tags.map(t => `<span class="tag ${t}" style="font-size:11px;padding:2px 8px;">#${t}</span>`).join('')}
+          <div style="font-weight:800;font-size:20px;color:var(--brand-gold);">${sub.avg !== null ? sub.avg + '%' : '<span style="font-size:14px;color:rgba(255,255,255,0.5);">Pending</span>'}</div>
+          <div class="tags" style="justify-content:flex-end;margin-top:6px;">
+            ${sub.tags.map(t => `<span class="tag ${t}" style="font-size:12px;padding:3px 10px;">#${t}</span>`).join('')}
           </div>
         </div>
       </div>
@@ -349,14 +451,14 @@ function renderChallenges() {
       <div class="card" style="border-left:4px solid ${divisions[div].color};">
         <div class="card-header">
           <div>
-            <div class="card-title">${sub.title}</div>
-            <div class="card-meta">by ${sub.author} · ${formatDate(sub.timestamp)}</div>
+            <div class="card-title" style="font-size:18px;">${sub.title}</div>
+            <div class="card-meta" style="font-size:14px;">by ${sub.author} · ${formatDate(sub.timestamp)}</div>
           </div>
           <span class="challenge-badge">Challenge</span>
         </div>
         <div class="tags">${sub.tags.map(t => `<span class="tag ${t}">#${t}</span>`).join('')}</div>
         ${sub.image ? `<img src="${sub.image}" class="submission-img" style="margin-top:10px;">` : ''}
-        <a href="${sub.link}" target="_blank" class="link-btn" style="font-size:14px;padding:8px 16px;">▶️ Play Song — ${sub.linkType || 'link'}</a>
+        <a href="${sub.link}" target="_blank" class="link-btn" style="font-size:14px;padding:10px 18px;margin-top:12px;">▶️ Play Song</a>
       </div>
     `).join('');
   });
