@@ -35,26 +35,48 @@ const SMTP_FROM = process.env.SMTP_FROM || 'astra-musica@notifications.com';
 let transporter = null;
 let emailEnabled = false;
 
-if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+async function setupSMTP() {
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+    console.log('[EMAIL] No SMTP config — email notifications disabled. Set SMTP_HOST, SMTP_USER, SMTP_PASS env vars.');
+    return;
+  }
+
   transporter = nodemailer.createTransport({
     host: SMTP_HOST,
     port: SMTP_PORT,
     secure: SMTP_PORT == 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS }
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 5000
   });
-  // Verify credentials immediately
-  transporter.verify((err, success) => {
-    if (err) {
-      console.error('[EMAIL] SMTP verification FAILED:', err.message);
-      console.error('[EMAIL] Check your SMTP_USER and SMTP_PASS. If using Gmail, you need an App Password, not your regular password.');
-      emailEnabled = false;
-    } else {
-      console.log('[EMAIL] SMTP transporter configured and verified ✓');
-      emailEnabled = true;
+
+  console.log('[EMAIL] Testing SMTP connection to', SMTP_HOST + ':' + SMTP_PORT, '...');
+
+  try {
+    await Promise.race([
+      new Promise((resolve, reject) => {
+        transporter.verify((err, success) => {
+          if (err) reject(err);
+          else resolve(success);
+        });
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP verify timeout after 5s')), 5000))
+    ]);
+    console.log('[EMAIL] SMTP transporter configured and verified ✓');
+    emailEnabled = true;
+  } catch (err) {
+    console.error('[EMAIL] SMTP verification FAILED:', err.message);
+    if (err.message.includes('Invalid login') || err.message.includes('Authentication')) {
+      console.error('[EMAIL] → Wrong password. Double-check SMTP_PASS. If using Gmail, use an App Password (no spaces).');
+    } else if (err.message.includes('timeout') || err.message.includes('ETIMEDOUT') || err.message.includes('ECONNREFUSED')) {
+      console.error('[EMAIL] → Connection timeout. Render may be blocking outbound SMTP on port', SMTP_PORT);
+      console.error('[EMAIL] → Try port 465 with secure:true, or switch to a transactional email service (Brevo, SendGrid).');
+    } else if (err.message.includes('self signed certificate')) {
+      console.error('[EMAIL] → SSL certificate issue. This is common with Brevo — try adding tls: { rejectUnauthorized: false }');
     }
-  });
-} else {
-  console.log('[EMAIL] No SMTP config — email notifications disabled. Set SMTP_HOST, SMTP_USER, SMTP_PASS env vars.');
+    emailEnabled = false;
+  }
 }
 
 // ===================== DIVISIONS =====================
@@ -243,12 +265,8 @@ function getWeekId() {
 
 // ===================== NOTIFICATIONS =====================
 async function notifyJudgesOfSubmission(submission) {
-  if (!transporter) {
-    console.log('[EMAIL] No SMTP config — skipping judge notification');
-    return;
-  }
-  if (!emailEnabled) {
-    console.log('[EMAIL] SMTP not verified — skipping judge notification. Check server logs for verification error.');
+  if (!transporter || !emailEnabled) {
+    console.log('[EMAIL] SMTP not ready — skipping judge notification. Status: enabled=' + emailEnabled + ', transporter=' + !!transporter);
     return;
   }
 
@@ -586,6 +604,8 @@ async function start() {
   if (dbConnected) {
     await loadFromDB();
   }
+
+  await setupSMTP();
 
   pollFacebook();
   setInterval(pollFacebook, POLL_INTERVAL_MS);
