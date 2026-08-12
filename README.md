@@ -1,36 +1,104 @@
-# Astra Musica Competition Platform v2
+# Astra Musica Competition Platform v2 — With MongoDB Persistence
 
-Complete music competition platform with 5 divisions, image uploads, Excel export, and weekly reset.
+Complete music competition platform that now **saves everything permanently** using MongoDB Atlas (free tier).
 
-## What's New in v2
+## The Problem (Fixed)
 
-- **5 Divisions**: English, Afrikaans, Gospel, Praise & Worship, Live Artists
-- **Beautiful backgrounds**: Sparkly navy kings blue main page + smoky division colors
-- **Any link support**: Suno, YouTube, Facebook, or any URL
-- **Image uploads**: Cover images for submissions + challenge banners
-- **Admin-managed judges**: You assign judges by email; they set their own passwords
-- **Division tabs**: Public can browse each division separately
-- **Excel export**: Download weekly data as .xlsx
-- **Weekly reset**: One-click clean slate for new week
-- **Logo customization**: Paste your logo URL in admin settings
+Render's free tier puts apps to sleep after inactivity. When they wake up, all in-memory data is lost:
+- ❌ Admin password changes gone
+- ❌ New judges deleted
+- ❌ Submissions vanished
+- ❌ Scores reset
 
-## File Structure
+**Solution:** MongoDB Atlas free tier (512MB) — data survives forever, even when Render sleeps.
 
-```
-astra-musica-platform-v2/
-├── server.js          # Express backend + API
-├── package.json       # Dependencies (express, axios, xlsx)
-└── public/            # Frontend
-    ├── index.html     # Main app
-    ├── app.js         # Frontend logic
-    └── style.css      # Brand styling with effects
-```
+---
+
+## Setup MongoDB Atlas (10 minutes, free forever)
+
+### Step 1: Create Account
+1. Go to [mongodb.com/atlas](https://www.mongodb.com/atlas)
+2. Click **"Try Free"** and sign up with Google
+3. You don't need a credit card
+
+### Step 2: Create Cluster
+1. Choose **"Shared"** (free tier)
+2. Select **AWS** as cloud provider
+3. Pick a region close to you (e.g. `af-south-1` for South Africa, or `eu-west-1` for Europe)
+4. Click **"Create Deployment"**
+5. Wait 1-3 minutes for the cluster to build
+
+### Step 3: Create Database User
+1. In the left sidebar, click **"Database Access"**
+2. Click **"Add New Database User"**
+3. Choose **"Password"** authentication
+4. Username: `astra_admin`
+5. Password: Create a strong password (write it down!)
+6. Under **"Database User Privileges"** select **"Read and write to any database"**
+7. Click **"Add User"**
+
+### Step 4: Allow Render to Connect
+1. In the left sidebar, click **"Network Access"**
+2. Click **"Add IP Address"**
+3. Click **"Allow Access from Anywhere"** (this adds `0.0.0.0/0`)
+4. Click **"Confirm"**
+
+### Step 5: Get Your Connection String
+1. Go back to **"Database"** in the left sidebar
+2. Click **"Connect"** on your cluster
+3. Click **"Drivers"**
+4. Select **"Node.js"**
+5. Copy the connection string. It looks like:
+   ```
+   mongodb+srv://astra_admin:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+   ```
+6. Replace `YOUR_PASSWORD` with the password you created in Step 3
+
+### Step 6: Add to Render
+1. Go to [render.com](https://render.com) → your web service
+2. Click **"Environment"** tab
+3. Click **"Add Environment Variable"**
+4. Key: `MONGODB_URI`
+5. Value: Paste your full connection string from Step 5
+6. Click **"Save Changes"**
+7. Render will auto-redeploy
+
+### Step 7: Verify
+1. Wait for deploy to finish
+2. Open your app URL
+3. Click **Admin** → enter password `astra2026`
+4. Add a judge or submission
+5. Wait 5 minutes for Render to sleep
+6. Refresh the page — your data is still there!
+
+---
+
+## What Gets Saved in MongoDB
+
+| Data | Collection | Survives Sleep? |
+|------|-----------|----------------|
+| Admin password | `settings` | ✅ Yes |
+| Judges | `judges` | ✅ Yes |
+| Submissions | `submissions` | ✅ Yes |
+| Scores | `scores` | ✅ Yes |
+| Challenge images | `challengeImages` | ✅ Yes |
+| Week ID / reveal status | `settings` | ✅ Yes |
+
+---
+
+## Without MongoDB (Fallback)
+
+If you don't set up MongoDB, the app still works perfectly. It just stores data in memory. When Render sleeps, data resets to the hardcoded defaults.
+
+**For testing:** You can use the app without MongoDB. For production competitions, MongoDB is strongly recommended.
+
+---
 
 ## Deploy to Render
 
 ### 1. Upload to GitHub
-- Create repo `astra-musica-submissions-app` (or new name)
-- Upload all 5 files at root level
+- Create repo `astra-musica-v2`
+- Upload all files at root level (server.js, package.json, public/)
 
 ### 2. Create Web Service
 - Language: **Node**
@@ -38,74 +106,50 @@ astra-musica-platform-v2/
 - Start: `npm start`
 - Root Directory: blank
 
-### 3. Done
-Your app goes live in 2–3 minutes.
+### 3. Add Environment Variables
+| Variable | Value |
+|----------|-------|
+| `MONGODB_URI` | Your MongoDB connection string |
+| `FB_PAGE_ID` | (Optional) Your Facebook Page ID |
+| `FB_ACCESS_TOKEN` | (Optional) Your Facebook token |
 
-## Demo Judge Login
+---
 
-| Email | Password | Division |
-|-------|----------|----------|
-| sarah@example.com | judge1 | English |
-| pieter@example.com | judge2 | Afrikaans |
-| rebecca@example.com | judge3 | Gospel |
-| david@example.com | judge4 | Praise & Worship |
+## Demo Logins
 
-## How to Use
+| Role | Email | Password |
+|------|-------|----------|
+| Judge (English) | sarah@example.com | judge1 |
+| Judge (Afrikaans) | pieter@example.com | judge2 |
+| Judge (Gospel) | rebecca@example.com | judge3 |
+| Judge (P&W) | david@example.com | judge4 |
 
-### Admin
-1. Click **Admin** on homepage
-2. **Submissions tab**: Add entries manually, upload challenge banners
-3. **Judges tab**: Assign new judges by name/email/division
-4. **Results tab**: Reveal/hide results, export Excel
-5. **Settings tab**: Reset week, update logo
+Admin password: `astra2026` (change immediately in Settings)
 
-### Judge
-1. Click **Judge** on homepage
-2. Enter your assigned email and password
-3. You only see submissions for YOUR division
-4. Score 4 criteria (0-10 each) → auto-calculates to %
-5. Other judges' scores stay hidden
+---
 
-### Public
-1. Click **Public** on homepage
-2. Browse Top 20s by division tabs
-3. View Challenges with uploaded banners
-4. See Final Results after admin reveals them
+## Integrated Management App
 
-## Adding Your Logo
+The file `Music_Management_Studio_Integrated.html` connects to your competition platform:
 
-In Admin → Settings, paste your logo URL. Or edit `public/index.html` and replace:
-```html
-<div class="logo-box" id="logoBox">AM</div>
-```
-With:
-```html
-<div class="logo-box"><img src="YOUR_LOGO_URL" style="width:44px;height:44px;object-fit:contain;"></div>
-```
+1. Open it in your browser
+2. Click **🎵 Astra Musica** tab
+3. Click **🔄 Sync Now** — fetches live data
+4. Click **📊 Push Rankings to Charts** — sends competition results to your Charts tab
+5. **💾 Save to File** — exports everything (contacts, artists, charts, competition data)
 
-## Adding Division Logos
-
-You can add division-specific logos by editing the `div-header` sections in `app.js` and inserting `<img>` tags.
-
-## Facebook Auto-Polling (Optional)
-
-Add to Render Environment:
-- `FB_PAGE_ID` = your Facebook Page ID
-- `FB_ACCESS_TOKEN` = your Page Access Token
-
-If left blank, app runs in manual mode perfectly.
-
-## Weekly Workflow
-
-1. **Monday**: Admin clicks "Reset for New Week" in Settings
-2. **Throughout week**: Add submissions manually from your Facebook Group
-3. **Judging**: Judges log in and score
-4. **Sunday**: Admin clicks "Reveal Results Now"
-5. **Export**: Download Excel for records
-6. Repeat
+---
 
 ## Troubleshooting
 
-**Images not persisting?** Render's filesystem is temporary. For production, integrate Firebase Storage and replace base64 storage with Firebase URLs.
+**"MongoDB connection failed" in logs**
+→ Check your `MONGODB_URI` is correct. Make sure you replaced `YOUR_PASSWORD` with the actual password.
 
-**Build fails?** Make sure `server.js` and `package.json` are at repo root, not in a subfolder.
+**"Allow Access from Anywhere" not working**
+→ In MongoDB Network Access, make sure `0.0.0.0/0` is listed and says "Active".
+
+**Data still resetting**
+→ Check Render logs. If it says "Memory-only mode", your `MONGODB_URI` is missing or wrong.
+
+**Build fails with "Cannot find module 'mongodb'"**
+→ Make sure `package.json` includes `"mongodb": "^6.0.0"` and you committed it before deploying.
