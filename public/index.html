@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Astra Musica — Competition Platform</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="main-page">
+<div class="app-container">
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-brand">
+      <div class="logo-box" id="logoBox">AM</div>
+      <h1>Astra <span>Musica</span></h1>
+    </div>
+    <div id="headerBadge"></div>
+  </div>
+
+  <!-- SCREEN: Role Selection -->
+  <div id="screenRole" class="screen">
+    <div class="welcome-hero">
+      <h1>Astra Musica</h1>
+      <p>Welcome to the ultimate music competition platform. Select your portal to begin.</p>
+    </div>
+    <div class="role-grid">
+      <div class="role-card" onclick="selectRole('admin')">
+        <div class="icon-wrap">⚙️</div>
+        <h3>Admin</h3>
+        <p>Manage submissions, judges, divisions, and reveal results</p>
+      </div>
+      <div class="role-card" onclick="selectRole('judge')">
+        <div class="icon-wrap">🎵</div>
+        <h3>Judge</h3>
+        <p>Score submissions in your assigned division</p>
+      </div>
+      <div class="role-card" onclick="selectRole('public')">
+        <div class="icon-wrap">👁️</div>
+        <h3>Public</h3>
+        <p>View Top 20s, challenges, and final results</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN: Judge Login -->
+  <div id="screenJudgeLogin" class="screen hidden">
+    <button class="back-btn" onclick="goBack()">← Back</button>
+    <div class="login-box">
+      <h2>Judge Sign In</h2>
+      <p class="hint">Enter your assigned email and password</p>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="judgeEmail" placeholder="your@email.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="judgePassword" placeholder="Your password">
+      </div>
+      <button class="btn btn-primary" onclick="loginJudge()">Sign In</button>
+      <p id="loginError" style="color:#ff6b6b;font-size:13px;text-align:center;margin-top:12px;display:none;">Invalid email or password.</p>
+    </div>
+  </div>
+
+  <!-- SCREEN: Judge Dashboard -->
+  <div id="screenJudge" class="screen hidden">
+    <button class="back-btn" onclick="goBack()">← Sign Out</button>
+    <div style="margin-bottom:20px;">
+      <h2 style="font-size:20px;font-weight:700;">Your Division: <span id="judgeDivisionName"></span></h2>
+      <p style="font-size:14px;color:rgba(255,255,255,0.5);">Score each submission across 4 criteria. Other judges' scores are hidden.</p>
+    </div>
+    <div id="judgeSubmissions"></div>
+  </div>
+
+  <!-- SCREEN: Public Dashboard -->
+  <div id="screenPublic" class="screen hidden">
+    <button class="back-btn" onclick="goBack()">← Back</button>
+    <div class="tabs">
+      <button class="tab active" onclick="setPublicTab('top20')" id="tabTop20">Top 20</button>
+      <button class="tab" onclick="setPublicTab('challenges')" id="tabChallenges">Challenges</button>
+      <button class="tab" onclick="setPublicTab('results')" id="tabResults">Final Results</button>
+    </div>
+
+    <!-- Division Tabs -->
+    <div class="div-tabs" id="publicDivTabs">
+      <button class="div-tab active" onclick="setPublicDiv('all')">All Divisions</button>
+      <button class="div-tab" onclick="setPublicDiv('english')">English</button>
+      <button class="div-tab" onclick="setPublicDiv('afrikaans')">Afrikaans</button>
+      <button class="div-tab" onclick="setPublicDiv('gospel')">Gospel</button>
+      <button class="div-tab" onclick="setPublicDiv('praiseandworship')">P&W</button>
+      <button class="div-tab" onclick="setPublicDiv('liveartists')">Live Artists</button>
+    </div>
+
+    <!-- Top 20 -->
+    <div id="publicTop20">
+      <div id="top20List"></div>
+    </div>
+
+    <!-- Challenges -->
+    <div id="publicChallenges" class="hidden">
+      <p style="font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:16px;">Weekly challenge submissions — first entry per person only.</p>
+      <div id="challengesList"></div>
+    </div>
+
+    <!-- Results -->
+    <div id="publicResults" class="hidden">
+      <div id="resultsCountdownWrap">
+        <p class="text-center text-secondary" style="margin-bottom:12px;font-size:15px;">Results will be revealed in:</p>
+        <div class="countdown">
+          <div class="countdown-item"><div class="num" id="cdDays">00</div><div class="label">days</div></div>
+          <div class="countdown-item"><div class="num" id="cdHours">00</div><div class="label">hours</div></div>
+          <div class="countdown-item"><div class="num" id="cdMins">00</div><div class="label">mins</div></div>
+          <div class="countdown-item"><div class="num" id="cdSecs">00</div><div class="label">secs</div></div>
+        </div>
+      </div>
+      <div id="resultsContent" class="hidden">
+        <div class="podium">
+          <div class="podium-card gold">
+            <div class="place">1st Place</div>
+            <div class="name" id="podium1Name">—</div>
+            <div class="score" id="podium1Score">—</div>
+          </div>
+          <div class="podium-card">
+            <div class="place">2nd Place</div>
+            <div class="name" id="podium2Name">—</div>
+            <div class="score" id="podium2Score">—</div>
+          </div>
+          <div class="podium-card">
+            <div class="place">3rd Place</div>
+            <div class="name" id="podium3Name">—</div>
+            <div class="score" id="podium3Score">—</div>
+          </div>
+        </div>
+        <div id="resultsList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN: Admin Dashboard -->
+  <div id="screenAdmin" class="screen hidden">
+    <button class="back-btn" onclick="goBack()">← Back</button>
+    <div class="tabs">
+      <button class="tab active" onclick="setAdminTab('submissions')" id="tabAdminSubmissions">Submissions</button>
+      <button class="tab" onclick="setAdminTab('judges')" id="tabAdminJudges">Judges</button>
+      <button class="tab" onclick="setAdminTab('results')" id="tabAdminResults">Results</button>
+      <button class="tab" onclick="setAdminTab('settings')" id="tabAdminSettings">Settings</button>
+    </div>
+
+    <!-- Admin: Submissions -->
+    <div id="adminSubmissions">
+      <!-- Manual Add Form -->
+      <div class="card" style="border:2px solid var(--brand-gold);">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--brand-gold);">➕ Add Submission Manually</h3>
+        <div class="manual-form">
+          <div class="form-group"><label>Artist Name</label><input type="text" id="mAuthor" placeholder="e.g. John D."></div>
+          <div class="form-group"><label>Song Title</label><input type="text" id="mTitle" placeholder="e.g. Broken Chains"></div>
+          <div class="form-group full"><label>Song Link (Suno, YouTube, Facebook, any)</label><input type="url" id="mLink" placeholder="https://..."></div>
+          <div class="form-group full"><label>Hashtags (space separated)</label><input type="text" id="mTags" placeholder="#english #gospel"></div>
+          <div class="form-group full"><label>Cover Image (optional)</label><input type="file" id="mImage" accept="image/*"><img id="mImagePreview" class="img-upload-preview hidden" style="display:none;"></div>
+          <div class="form-group">
+            <label>Entry Type</label>
+            <select id="mType">
+              <option value="top20">Top 20</option>
+              <option value="challenge">Challenge</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Challenge Division (if challenge)</label>
+            <select id="mChallengeDiv">
+              <option value="">—</option>
+              <option value="english">English</option>
+              <option value="afrikaans">Afrikaans</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <button class="btn btn-gold" onclick="addManualSubmission()">Add to Competition</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Challenge Image Upload -->
+      <div class="card mt-2" style="border:2px solid rgba(255,255,255,0.1);">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--brand-gold);">📸 Upload Challenge Banner</h3>
+        <div class="manual-form">
+          <div class="form-group">
+            <label>Division</label>
+            <select id="challengeImgDiv">
+              <option value="english">English</option>
+              <option value="afrikaans">Afrikaans</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label>Challenge Image</label>
+            <input type="file" id="challengeImg" accept="image/*">
+            <img id="challengeImgPreview" class="img-upload-preview hidden" style="display:none;">
+          </div>
+          <div class="form-group full">
+            <button class="btn btn-primary" onclick="uploadChallengeImage()">Upload Challenge Image</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-bar" id="adminFilters" style="margin-top:20px;">
+        <button class="filter-btn active" onclick="filterAdmin('all')">All</button>
+        <button class="filter-btn" onclick="filterAdmin('english')">English</button>
+        <button class="filter-btn" onclick="filterAdmin('afrikaans')">Afrikaans</button>
+        <button class="filter-btn" onclick="filterAdmin('gospel')">Gospel</button>
+        <button class="filter-btn" onclick="filterAdmin('praiseandworship')">P&W</button>
+        <button class="filter-btn" onclick="filterAdmin('liveartists')">Live Artists</button>
+      </div>
+      <div id="adminSubmissionList"></div>
+    </div>
+
+    <!-- Admin: Judges -->
+    <div id="adminJudges" class="hidden">
+      <div class="card" style="margin-bottom:20px;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--brand-gold);">➕ Assign New Judge</h3>
+        <div class="manual-form">
+          <div class="form-group"><label>Name</label><input type="text" id="newJudgeName" placeholder="Judge Name"></div>
+          <div class="form-group"><label>Email</label><input type="email" id="newJudgeEmail" placeholder="judge@email.com"></div>
+          <div class="form-group">
+            <label>Division</label>
+            <select id="newJudgeDivision">
+              <option value="english">English</option>
+              <option value="afrikaans">Afrikaans</option>
+              <option value="gospel">Gospel</option>
+              <option value="praiseandworship">Praise & Worship</option>
+              <option value="liveartists">Live Artists</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <button class="btn btn-gold" onclick="addJudge()">Assign Judge</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Division</th><th>Status</th><th>Password</th><th>Scores</th></tr></thead>
+          <tbody id="judgesTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Admin: Results Control -->
+    <div id="adminResults" class="hidden">
+      <div class="card" style="max-width:500px;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--brand-gold);">Results Reveal Control</h3>
+        <div style="display:flex;gap:12px;margin-bottom:16px;">
+          <button class="btn btn-primary" onclick="revealResults()">Reveal Results Now</button>
+          <button class="btn btn-secondary" onclick="hideResults()">Hide Results</button>
+        </div>
+        <p style="font-size:13px;color:rgba(255,255,255,0.4);">When revealed, the public and judges will see the final rankings and podium.</p>
+      </div>
+      <div class="card mt-2" style="max-width:500px;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">Scoring Summary</h3>
+        <div id="adminScoreSummary"></div>
+      </div>
+      <div class="card mt-2" style="max-width:500px;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">📊 Export Data</h3>
+        <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:12px;">Download Excel file with all submissions and scores for this week.</p>
+        <button class="btn btn-gold" onclick="exportExcel()">Download Excel Export</button>
+      </div>
+    </div>
+
+    <!-- Admin: Settings -->
+    <div id="adminSettings" class="hidden">
+      <div class="card" style="max-width:500px; border:2px solid #ff6b6b;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:#ff6b6b;">⚠️ Reset Week</h3>
+        <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;">This will delete ALL submissions and scores and start a fresh week. This action cannot be undone.</p>
+        <button class="btn btn-danger" onclick="resetWeek()">Reset for New Week</button>
+      </div>
+      <div class="card mt-2" style="max-width:500px;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">🎨 Logo</h3>
+        <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">Replace the "AM" placeholder with your Astra Musica logo.</p>
+        <div class="form-group">
+          <label>Logo URL (or upload to Firebase Storage and paste link)</label>
+          <input type="url" id="logoUrl" placeholder="https://firebasestorage.../logo.png">
+        </div>
+        <button class="btn btn-primary" onclick="updateLogo()">Update Logo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function updateLogo() {
+  const url = document.getElementById('logoUrl').value.trim();
+  if (!url) return;
+  const box = document.getElementById('logoBox');
+  box.innerHTML = '<img src="' + url + '" alt="Astra Musica" style="width:44px;height:44px;object-fit:contain;">';
+  box.style.background = 'transparent';
+  box.style.border = 'none';
+  box.style.boxShadow = 'none';
+  toast('Logo updated!');
+}
+</script>
+<script src="app.js"></script>
+</body>
+</html>
