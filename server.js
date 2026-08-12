@@ -4,6 +4,16 @@ const axios = require('axios');
 const XLSX = require('xlsx');
 
 const app = express();
+
+// CORS — allow your local management app to fetch data
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -195,6 +205,26 @@ app.post('/api/admin/reveal', (req, res) => {
 app.get('/api/status', (req, res) => res.json({ resultsRevealed, revealTime, currentWeekId }));
 
 app.get('/api/rankings', (req, res) => res.json(getRankings()));
+
+// All-in-one data dump for the management app
+app.get('/api/all-data', (req, res) => {
+  const safeJudges = {};
+  for (const [k, v] of Object.entries(judges)) {
+    safeJudges[k] = { name: v.name, email: v.email, division: v.division, hasSetPassword: v.hasSetPassword };
+  }
+  res.json({
+    weekId: currentWeekId,
+    resultsRevealed,
+    revealTime,
+    divisions,
+    judges: safeJudges,
+    submissions,
+    scores,
+    rankings: getRankings(),
+    challengeSubs: getChallengeSubs(),
+    challengeImages
+  });
+});
 
 // Challenge images
 app.post('/api/challenge-image', (req, res) => {
