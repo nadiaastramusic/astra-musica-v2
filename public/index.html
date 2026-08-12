@@ -8,10 +8,8 @@
 </head>
 <body class="main-page">
 <div class="app-container">
-  <!-- Toast -->
   <div id="toast" class="toast"></div>
 
-  <!-- Header -->
   <div class="header">
     <div class="header-brand">
       <div class="logo-box" id="logoBox">AM</div>
@@ -20,7 +18,6 @@
     <div id="headerBadge"></div>
   </div>
 
-  <!-- SCREEN: Role Selection -->
   <div id="screenRole" class="screen">
     <div class="welcome-hero">
       <h1>Astra Musica</h1>
@@ -45,7 +42,6 @@
     </div>
   </div>
 
-  <!-- SCREEN: Admin Login -->
   <div id="screenAdminLogin" class="screen hidden">
     <button class="back-btn" onclick="goBack()">← Back</button>
     <div class="login-box">
@@ -61,7 +57,6 @@
     </div>
   </div>
 
-  <!-- SCREEN: Judge Login -->
   <div id="screenJudgeLogin" class="screen hidden">
     <button class="back-btn" onclick="goBack()">← Back</button>
     <div class="login-box">
@@ -80,7 +75,6 @@
     </div>
   </div>
 
-  <!-- SCREEN: Judge Dashboard -->
   <div id="screenJudge" class="screen hidden">
     <button class="back-btn" onclick="goBack()">← Sign Out</button>
     <div style="margin-bottom:20px;">
@@ -90,7 +84,6 @@
     <div id="judgeSubmissions"></div>
   </div>
 
-  <!-- SCREEN: Public Dashboard -->
   <div id="screenPublic" class="screen hidden">
     <button class="back-btn" onclick="goBack()">← Back</button>
     <div class="tabs">
@@ -99,7 +92,6 @@
       <button class="tab" onclick="setPublicTab('results')" id="tabResults">Final Results</button>
     </div>
 
-    <!-- Division Tabs -->
     <div class="div-tabs" id="publicDivTabs">
       <button class="div-tab active" onclick="setPublicDiv('all')">🏠 All Divisions</button>
       <button class="div-tab" onclick="setPublicDiv('english')" style="border-color:rgba(196,30,58,0.3);">🔴 English</button>
@@ -109,18 +101,15 @@
       <button class="div-tab" onclick="setPublicDiv('liveartists')" style="border-color:rgba(0,128,128,0.3);">🔵 Live Artists</button>
     </div>
 
-    <!-- Top 20 -->
     <div id="publicTop20">
       <div id="top20List"></div>
     </div>
 
-    <!-- Challenges -->
     <div id="publicChallenges" class="hidden">
       <p style="font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:16px;">Weekly challenge submissions — first entry per person only.</p>
       <div id="challengesList"></div>
     </div>
 
-    <!-- Results -->
     <div id="publicResults" class="hidden">
       <div id="resultsCountdownWrap">
         <p class="text-center text-secondary" style="margin-bottom:12px;font-size:15px;">Results will be revealed in:</p>
@@ -154,7 +143,6 @@
     </div>
   </div>
 
-  <!-- SCREEN: Admin Dashboard -->
   <div id="screenAdmin" class="screen hidden">
     <button class="back-btn" onclick="goBack()">← Back</button>
     <div class="tabs">
@@ -164,9 +152,7 @@
       <button class="tab" onclick="setAdminTab('settings')" id="tabAdminSettings">Settings</button>
     </div>
 
-    <!-- Admin: Submissions -->
     <div id="adminSubmissions">
-      <!-- Manual Add Form -->
       <div class="card" style="border:2px solid var(--brand-gold);">
         <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--brand-gold);">➕ Add Submission Manually</h3>
         <div class="manual-form">
@@ -196,7 +182,6 @@
         </div>
       </div>
 
-      <!-- Challenge Image Upload -->
       <div class="card mt-2" style="border:2px solid rgba(255,255,255,0.1);">
         <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--brand-gold);">📸 Upload Challenge Banner</h3>
         <div class="manual-form">
@@ -229,7 +214,6 @@
       <div id="adminSubmissionList"></div>
     </div>
 
-    <!-- Admin: Judges -->
     <div id="adminJudges" class="hidden">
       <div class="card" style="margin-bottom:20px;">
         <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--brand-gold);">➕ Assign New Judge</h3>
@@ -260,7 +244,6 @@
       </div>
     </div>
 
-    <!-- Admin: Results Control -->
     <div id="adminResults" class="hidden">
       <div class="card" style="max-width:500px;">
         <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--brand-gold);">Results Reveal Control</h3>
@@ -281,7 +264,6 @@
       </div>
     </div>
 
-    <!-- Admin: Settings -->
     <div id="adminSettings" class="hidden">
       <div class="card" style="max-width:500px; border:2px solid var(--brand-gold);">
         <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">🔐 Change Admin Password</h3>
@@ -306,33 +288,46 @@
         <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;">This will delete ALL submissions and scores and start a fresh week. This action cannot be undone.</p>
         <button class="btn btn-danger" onclick="resetWeek()">Reset for New Week</button>
       </div>
+
       <div class="card mt-2" style="max-width:500px;">
-        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">🎨 Logo</h3>
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">🎨 Main Logo</h3>
         <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">Replace the "AM" placeholder with your Astra Musica logo.</p>
         <div class="form-group">
           <label>Option 1: Paste Logo URL</label>
-          <input type="url" id="logoUrl" placeholder="https://firebasestorage.../logo.png">
+          <input type="url" id="logoUrl" placeholder="https://raw.githubusercontent.com/.../logo.png">
         </div>
         <button class="btn btn-primary" onclick="updateLogo()" style="margin-bottom:16px;">Update from URL</button>
         <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:16px;">
           <label style="display:block;font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);margin-bottom:8px;">Option 2: Upload Logo File</label>
           <input type="file" id="logoFileInput" accept="image/*" style="margin-bottom:10px;">
-          <button class="btn btn-gold" onclick="uploadLogoToFirebase()">Upload Logo</button>
-          <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:8px;">The logo will update immediately. For permanent storage across sessions, use Firebase Storage (see README).</p>
+          <button class="btn btn-gold" onclick="uploadLogoFile()">Upload Logo</button>
+          <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:8px;">The logo saves to MongoDB and persists forever. For smaller file size, use a URL instead.</p>
         </div>
       </div>
 
       <div class="card mt-2" style="max-width:500px;">
-        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">🔥 Firebase Storage Setup</h3>
-        <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">To make images permanent, connect your Firebase project:</p>
-        <ol style="font-size:13px;color:rgba(255,255,255,0.5);margin-left:20px;margin-bottom:12px;line-height:1.8;">
-          <li>Go to <a href="https://console.firebase.google.com" target="_blank" style="color:var(--brand-gold);">Firebase Console</a></li>
-          <li>Select your project → Storage → Get Started</li>
-          <li>Set rules to allow reads: <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">allow read;</code></li>
-          <li>Upload your logo → Copy the download URL</li>
-          <li>Paste the URL in "Logo URL" field above</li>
-        </ol>
-        <p style="font-size:12px;color:rgba(255,255,255,0.4);">For now, uploaded images work for the current session. They reset when the server restarts.</p>
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">🏷️ Division Logos</h3>
+        <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;">Set a unique logo for each division. These appear on the public leaderboard and challenge pages.</p>
+        <div id="divisionLogosList"></div>
+      </div>
+
+      <div class="card mt-2" style="max-width:500px;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">📧 Judge Notifications</h3>
+        <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">Email judges automatically when a new submission is added to their division.</p>
+        <div style="background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;margin-bottom:12px;">
+          <p style="font-size:13px;color:rgba(255,255,255,0.6);margin:0;"><b>Status:</b> <span id="emailStatus">Checking...</span></p>
+          <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:6px;">To enable email, add these environment variables on Render:</p>
+          <code style="display:block;background:rgba(0,0,0,0.3);padding:8px;border-radius:4px;font-size:11px;margin-top:6px;color:#6bff6b;">
+            SMTP_HOST=smtp.gmail.com<br>
+            SMTP_PORT=587<br>
+            SMTP_USER=your-email@gmail.com<br>
+            SMTP_PASS=your-app-password<br>
+            SMTP_FROM=astra-musica@notifications.com
+          </code>
+        </div>
+        <h4 style="font-size:14px;font-weight:600;margin-bottom:10px;color:rgba(255,255,255,0.7);">WhatsApp Notifications</h4>
+        <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">Send manual WhatsApp alerts to judges. Click a judge below to open WhatsApp.</p>
+        <div id="whatsappNotifyList"></div>
       </div>
     </div>
   </div>

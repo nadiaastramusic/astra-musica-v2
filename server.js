@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const XLSX = require('xlsx');
 const { MongoClient } = require('mongodb');
+const nodemailer = require('nodemailer');
 
 const app = express();
 
@@ -24,6 +25,26 @@ const FB_ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN || '';
 const MONGODB_URI = process.env.MONGODB_URI || '';
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
 
+// SMTP Config for judge notifications
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = process.env.SMTP_PORT || 587;
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM = process.env.SMTP_FROM || 'astra-musica@notifications.com';
+
+let transporter = null;
+if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+  transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT == 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS }
+  });
+  console.log('[EMAIL] SMTP transporter configured');
+} else {
+  console.log('[EMAIL] No SMTP config — email notifications disabled. Set SMTP_HOST, SMTP_USER, SMTP_PASS env vars.');
+}
+
 // ===================== DIVISIONS =====================
 const divisions = {
   english: { name: 'English', color: '#C41E3A' },
@@ -36,6 +57,7 @@ const divisions = {
 // ===================== IN-MEMORY CACHE =====================
 let adminPassword = 'astra2026';
 let appLogo = '';
+let divisionLogos = {};
 let judges = {};
 let submissions = [];
 let scores = {};
@@ -81,6 +103,9 @@ async function loadFromDB() {
     const logoDoc = await db.collection('settings').findOne({ _id: 'logo' });
     if (logoDoc) appLogo = logoDoc.url || '';
 
+    const divLogoDoc = await db.collection('settings').findOne({ _id: 'divisionLogos' });
+    if (divLogoDoc) divisionLogos = divLogoDoc.data || {};
+
     const judgesDoc = await db.collection('judges').findOne({ _id: 'all' });
     if (judgesDoc) judges = judgesDoc.data || {};
 
@@ -97,7 +122,8 @@ async function loadFromDB() {
       judges: Object.keys(judges).length,
       submissions: submissions.length,
       scores: Object.keys(scores).length,
-      week: currentWeekId
+      week: currentWeekId,
+      divisionLogos: Object.keys(divisionLogos).length
     });
   } catch (err) {
     console.error('[DB] Load error:', err.message);
@@ -109,6 +135,15 @@ async function saveSettings() {
   await db.collection('settings').updateOne(
     { _id: 'main' },
     { $set: { adminPassword, resultsRevealed, revealTime, currentWeekId, nextId } },
+    { upsert: true }
+  );
+}
+
+async function saveDivisionLogos() {
+  if (!db) return;
+  await db.collection('settings').updateOne(
+    { _id: 'divisionLogos' },
+    { $set: { data: divisionLogos } },
     { upsert: true }
   );
 }
@@ -194,6 +229,64 @@ function getWeekId() {
   return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
+// ===================== NOTIFICATIONS =====================
+async function notifyJudgesOfSubmission(submission) {
+  if (!transporter) {
+    console.log('[EMAIL] No SMTP config — skipping judge notification');
+    return;
+  }
+
+  const relevantJudges = Object.values(judges).filter(j =>
+    submission.tags.includes(j.division)
+  );
+
+  if (relevantJudges.length === 0) {
+    console.log('[EMAIL] No judges found for divisions:', submission.tags);
+    return;
+  }
+
+  const divNames = submission.tags.map(t => divisions[t]?.name || t).join(', ');
+
+  for (const judge of relevantJudges) {
+    try {
+      const mailOptions = {
+        from: `"Astra Musica" <${SMTP_FROM}>`,
+        to: judge.email,
+        subject: `New Submission in ${divisions[judge.division]?.name || judge.division}`,
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;color:#333;">
+            <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:24px;border-radius:12px 12px 0 0;text-align:center;">
+              <h2 style="color:#d4af37;margin:0;">Astra Musica</h2>
+              <p style="color:rgba(255,255,255,0.7);margin:8px 0 0 0;font-size:14px;">New Submission Alert</p>
+            </div>
+            <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;border:1px solid #e0e0e0;border-top:none;">
+              <p style="font-size:15px;margin-bottom:16px;">Hi <b>${judge.name}</b>,</p>
+              <p style="font-size:14px;line-height:1.6;">A new song has been submitted to your division and is ready for scoring.</p>
+              <div style="background:#f8f9fa;padding:16px;border-radius:8px;margin:16px 0;">
+                <p style="margin:0 0 8px 0;font-size:14px;"><b>Artist:</b> ${submission.author}</p>
+                <p style="margin:0 0 8px 0;font-size:14px;"><b>Title:</b> ${submission.title}</p>
+                <p style="margin:0 0 8px 0;font-size:14px;"><b>Division:</b> ${divNames}</p>
+                <p style="margin:0;font-size:14px;"><b>Week:</b> ${submission.weekId}</p>
+              </div>
+              <div style="text-align:center;margin:24px 0;">
+                <a href="https://astra-musica.onrender.com" style="background:#d4af37;color:#1a1a2e;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;display:inline-block;">Open Judge Panel</a>
+              </div>
+              <p style="font-size:12px;color:#888;margin-top:20px;border-top:1px solid #eee;padding-top:12px;">
+                You received this because you are a judge for the ${divisions[judge.division]?.name || judge.division} division on Astra Musica.
+              </p>
+            </div>
+          </div>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log(`[EMAIL] Notification sent to ${judge.email} for submission #${submission.id}`);
+    } catch (err) {
+      console.error(`[EMAIL] Failed to notify ${judge.email}:`, err.message);
+    }
+  }
+}
+
 // ===================== API ROUTES =====================
 
 app.get('/api/divisions', (req, res) => res.json(divisions));
@@ -212,6 +305,9 @@ app.post('/api/submissions', async (req, res) => {
   submissions.push(sub);
   await saveSubmissions();
   await saveSettings();
+
+  notifyJudgesOfSubmission(sub).catch(err => console.error('[EMAIL] Notification error:', err));
+
   res.json(sub);
 });
 
@@ -326,8 +422,30 @@ app.get('/api/all-data', (req, res) => {
     scores,
     rankings: getRankings(),
     challengeSubs: getChallengeSubs(),
-    challengeImages
+    challengeImages,
+    divisionLogos
   });
+});
+
+// Division Logos
+app.get('/api/division-logos', (req, res) => res.json(divisionLogos));
+
+app.post('/api/division-logos', async (req, res) => {
+  const { division, url } = req.body;
+  if (!division || !url) return res.status(400).json({ error: 'Division and URL required' });
+  divisionLogos[division] = url;
+  await saveDivisionLogos();
+  res.json({ success: true, divisionLogos });
+});
+
+// WhatsApp notification links
+app.get('/api/notify/whatsapp/:division', (req, res) => {
+  const division = req.params.division;
+  const divJudges = Object.values(judges).filter(j => j.division === division);
+  const links = divJudges.map(j => {
+    return { name: j.name, email: j.email };
+  });
+  res.json({ judges: links });
 });
 
 // Challenge images
@@ -427,6 +545,7 @@ async function start() {
     console.log(`Astra Musica v2 running on port ${PORT}`);
     console.log(`Database: ${dbConnected ? 'MongoDB Atlas ✓' : 'Memory-only (data resets on sleep)'}`);
     console.log(`Week: ${currentWeekId} | FB polling: ${FB_PAGE_ID && FB_ACCESS_TOKEN ? 'ON' : 'OFF'}`);
+    console.log(`Email notifications: ${transporter ? 'ON ✓' : 'OFF (set SMTP_HOST, SMTP_USER, SMTP_PASS)'}`);
   });
 }
 

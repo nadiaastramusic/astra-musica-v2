@@ -21,6 +21,8 @@ let publicDivFilter = 'all';
 let publicTab = 'top20';
 let adminDivFilter = 'all';
 let challengeImages = {};
+let divisionLogos = {};
+let emailEnabled = false;
 
 // ===================== UTILS =====================
 function $(id) { return document.getElementById(id); }
@@ -100,12 +102,14 @@ async function apiDelete(path) {
 }
 
 async function loadData() {
-  submissions = await apiGet('/api/submissions');
-  scores = await apiGet('/api/scores');
-  const status = await apiGet('/api/status');
-  resultsRevealed = status.resultsRevealed;
-  revealTime = status.revealTime;
-  currentWeekId = status.currentWeekId || currentWeekId;
+  const allData = await apiGet('/api/all-data');
+  submissions = allData.submissions || [];
+  scores = allData.scores || {};
+  resultsRevealed = allData.resultsRevealed;
+  revealTime = allData.revealTime;
+  currentWeekId = allData.weekId || currentWeekId;
+  challengeImages = allData.challengeImages || {};
+  divisionLogos = allData.divisionLogos || {};
 }
 
 // ===================== NAVIGATION =====================
@@ -287,7 +291,6 @@ function renderJudgePanel() {
   }).join('');
 }
 
-// In-memory score tracking while editing
 let editingScores = {};
 
 function adjustScore(subId, criterion, delta) {
@@ -357,7 +360,6 @@ function setPublicTab(tab) {
   hide('publicTop20'); hide('publicChallenges'); hide('publicResults');
   show('public' + (tab === 'top20' ? 'Top20' : tab === 'challenges' ? 'Challenges' : 'Results'));
 
-  // Reset background when switching tabs
   if (publicDivFilter === 'all') {
     setBodyClass('main-page');
   } else {
@@ -374,7 +376,6 @@ function setPublicDiv(div) {
   document.querySelectorAll('#publicDivTabs .div-tab').forEach(b => b.classList.remove('active'));
   event.target.classList.add('active');
 
-  // Change background to division color
   if (div === 'all') {
     setBodyClass('main-page');
   } else {
@@ -396,10 +397,14 @@ function renderTop20() {
     if (divSubs.length === 0) return;
 
     const divColor = divisions[div].color;
-    html += `<div class="div-header" style="border-color:${divColor}40;">
-      <h2 style="color:${divColor};">${divisions[div].name}</h2>
-      <p>Top 20 Submissions</p>
-    </div>`;
+    const divLogo = divisionLogos[div];
+
+    html += `<div class="div-header" style="border-color:${divColor}40;">`;
+    if (divLogo) {
+      html += `<img src="${divLogo}" alt="${divisions[div].name}" style="width:48px;height:48px;object-fit:contain;border-radius:8px;margin-right:12px;background:rgba(255,255,255,0.05);padding:4px;">`;
+    }
+    html += `<div><h2 style="color:${divColor};margin:0;">${divisions[div].name}</h2><p style="margin:4px 0 0 0;color:rgba(255,255,255,0.5);font-size:13px;">Top 20 Submissions</p></div></div>`;
+
     html += divSubs.map((sub, idx) => `
       <div class="submission-row">
         <div class="submission-info">
@@ -432,11 +437,13 @@ function renderChallenges() {
   divs.forEach(div => {
     const divChals = chals.filter(c => c.challengeDivision === div);
     const img = challengeImages[currentWeekId]?.[div];
+    const divLogo = divisionLogos[div];
 
-    html += `<div class="div-header" style="border-color:${divisions[div].color}40;">
-      <h2 style="color:${divisions[div].color};">${divisions[div].name} Challenge</h2>
-      <p>Weekly Challenge Entries</p>
-    </div>`;
+    html += `<div class="div-header" style="border-color:${divisions[div].color}40;">`;
+    if (divLogo) {
+      html += `<img src="${divLogo}" alt="${divisions[div].name}" style="width:48px;height:48px;object-fit:contain;border-radius:8px;margin-right:12px;background:rgba(255,255,255,0.05);padding:4px;">`;
+    }
+    html += `<div><h2 style="color:${divisions[div].color};margin:0;">${divisions[div].name} Challenge</h2><p style="margin:4px 0 0 0;color:rgba(255,255,255,0.5);font-size:13px;">Weekly Challenge Entries</p></div></div>`;
 
     if (img) {
       html += `<img src="${img}" class="challenge-img" alt="Challenge banner">`;
@@ -661,7 +668,78 @@ async function resetWeek() {
 }
 
 function renderAdminSettings() {
-  // Settings rendered inline
+  renderDivisionLogoSettings();
+  renderNotificationSettings();
+}
+
+function renderDivisionLogoSettings() {
+  const container = $('divisionLogosList');
+  if (!container) return;
+
+  let html = '';
+  Object.keys(divisions).forEach(div => {
+    const divColor = divisions[div].color;
+    const currentLogo = divisionLogos[div] || '';
+    html += `
+      <div style="margin-bottom:16px;padding:12px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <div style="width:12px;height:12px;border-radius:50%;background:${divColor};"></div>
+          <span style="font-weight:600;font-size:14px;">${divisions[div].name}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="url" id="divLogoUrl-${div}" placeholder="Logo URL" value="${currentLogo}" style="flex:1;padding:8px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:white;font-size:13px;">
+          <input type="file" id="divLogoFile-${div}" accept="image/*" style="display:none;" onchange="handleDivLogoUpload('${div}', this)">
+          <button onclick="document.getElementById('divLogoFile-${div}').click()" style="padding:8px 12px;background:rgba(255,255,255,0.1);border:none;border-radius:6px;color:white;cursor:pointer;font-size:12px;">📁</button>
+          <button onclick="updateDivisionLogo('${div}')" style="padding:8px 16px;background:var(--brand-gold);border:none;border-radius:6px;color:#1a1a2e;cursor:pointer;font-size:12px;font-weight:700;">Save</button>
+        </div>
+        ${currentLogo ? `<img src="${currentLogo}" style="width:60px;height:60px;object-fit:contain;margin-top:10px;border-radius:6px;background:rgba(255,255,255,0.05);padding:4px;">` : ''}
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+}
+
+async function handleDivLogoUpload(div, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    $(`divLogoUrl-${div}`).value = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function updateDivisionLogo(div) {
+  const url = $(`divLogoUrl-${div}`).value.trim();
+  if (!url) { toast('Enter a logo URL or upload a file', 'error'); return; }
+  await apiPost('/api/division-logos', { division: div, url });
+  divisionLogos[div] = url;
+  renderDivisionLogoSettings();
+  toast(`${divisions[div].name} logo saved!`);
+}
+
+function renderNotificationSettings() {
+  const emailStatus = $('emailStatus');
+  if (emailStatus) {
+    emailStatus.innerHTML = '<span style="color:var(--brand-gold);">⚠️ Disabled — add SMTP env vars on Render</span>';
+  }
+
+  const waContainer = $('whatsappNotifyList');
+  if (!waContainer) return;
+
+  let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
+  Object.keys(divisions).forEach(div => {
+    const divJudges = Object.values(judges).filter(j => j.division === div);
+    if (divJudges.length === 0) return;
+    html += `<div style="margin-bottom:8px;"><p style="font-size:13px;font-weight:600;color:${divisions[div].color};margin-bottom:6px;">${divisions[div].name}</p>`;
+    divJudges.forEach(j => {
+      const msg = encodeURIComponent(`Hi ${j.name}, a new submission has been added to the ${divisions[div].name} division on Astra Musica. Please log in to score it.`);
+      html += `<a href="https://wa.me/?text=${msg}" target="_blank" style="display:inline-block;padding:6px 12px;background:rgba(37,211,102,0.15);color:#25d366;border:1px solid rgba(37,211,102,0.3);border-radius:6px;text-decoration:none;font-size:12px;margin-right:6px;margin-bottom:6px;">📱 WhatsApp ${j.name}</a>`;
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  waContainer.innerHTML = html || '<p style="font-size:13px;color:rgba(255,255,255,0.4);">No judges assigned yet.</p>';
 }
 
 // ===================== MANUAL SUBMISSION =====================
@@ -728,18 +806,7 @@ async function uploadChallengeImage() {
   toast('Challenge image uploaded!');
 }
 
-// ===================== INIT =====================
-async function init() {
-  await loadData();
-  await loadLogo();
-  setBodyClass('main-page');
-  showScreen('screenRole');
-  updateCountdown();
-  handleImageUpload('mImage', 'mImagePreview');
-  handleImageUpload('challengeImg', 'challengeImgPreview');
-}
-init();
-
+// ===================== LOGO =====================
 async function loadLogo() {
   try {
     const res = await apiGet('/api/logo');
@@ -771,7 +838,7 @@ async function updateLogo() {
   toast('Logo saved! It will appear for everyone.');
 }
 
-async function uploadLogoToFirebase() {
+async function uploadLogoFile() {
   const fileInput = document.getElementById('logoFileInput');
   const file = fileInput.files[0];
   if (!file) { toast('Select a logo image first', 'error'); return; }
@@ -786,29 +853,14 @@ async function uploadLogoToFirebase() {
   reader.readAsDataURL(file);
 }
 
-// ===== FIREBASE LOGO UPLOAD HELPER =====
-// Paste your Firebase config here:
-const FIREBASE_CONFIG = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  projectId: 'YOUR_PROJECT',
-  storageBucket: 'YOUR_PROJECT.appspot.com'
-};
-
-async function uploadLogoToFirebase() {
-  const fileInput = document.getElementById('logoFileInput');
-  const file = fileInput.files[0];
-  if (!file) { toast('Select a logo image first', 'error'); return; }
-
-  // For now, use base64 preview. In production, upload to Firebase Storage.
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const box = document.getElementById('logoBox');
-    box.innerHTML = '<img src="' + e.target.result + '" alt="Astra Musica" style="width:44px;height:44px;object-fit:contain;">';
-    box.style.background = 'transparent';
-    box.style.border = 'none';
-    box.style.boxShadow = 'none';
-    toast('Logo updated! (For permanent storage, upload to Firebase Storage and paste the URL in Settings)');
-  };
-  reader.readAsDataURL(file);
+// ===================== INIT =====================
+async function init() {
+  await loadData();
+  await loadLogo();
+  setBodyClass('main-page');
+  showScreen('screenRole');
+  updateCountdown();
+  handleImageUpload('mImage', 'mImagePreview');
+  handleImageUpload('challengeImg', 'challengeImgPreview');
 }
+init();
