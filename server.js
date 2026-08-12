@@ -33,6 +33,8 @@ const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || 'astra-musica@notifications.com';
 
 let transporter = null;
+let emailEnabled = false;
+
 if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
   transporter = nodemailer.createTransport({
     host: SMTP_HOST,
@@ -40,7 +42,17 @@ if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
     secure: SMTP_PORT == 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS }
   });
-  console.log('[EMAIL] SMTP transporter configured');
+  // Verify credentials immediately
+  transporter.verify((err, success) => {
+    if (err) {
+      console.error('[EMAIL] SMTP verification FAILED:', err.message);
+      console.error('[EMAIL] Check your SMTP_USER and SMTP_PASS. If using Gmail, you need an App Password, not your regular password.');
+      emailEnabled = false;
+    } else {
+      console.log('[EMAIL] SMTP transporter configured and verified ✓');
+      emailEnabled = true;
+    }
+  });
 } else {
   console.log('[EMAIL] No SMTP config — email notifications disabled. Set SMTP_HOST, SMTP_USER, SMTP_PASS env vars.');
 }
@@ -235,6 +247,10 @@ async function notifyJudgesOfSubmission(submission) {
     console.log('[EMAIL] No SMTP config — skipping judge notification');
     return;
   }
+  if (!emailEnabled) {
+    console.log('[EMAIL] SMTP not verified — skipping judge notification. Check server logs for verification error.');
+    return;
+  }
 
   const relevantJudges = Object.values(judges).filter(j =>
     submission.tags.includes(j.division)
@@ -425,6 +441,40 @@ app.get('/api/all-data', (req, res) => {
     challengeImages,
     divisionLogos
   });
+});
+
+// Email status
+app.get('/api/email-status', (req, res) => {
+  res.json({
+    enabled: emailEnabled,
+    host: SMTP_HOST || null,
+    from: SMTP_FROM,
+    message: emailEnabled
+      ? 'SMTP is configured and verified. Judges will receive emails on new submissions.'
+      : 'SMTP not configured or verification failed. Add SMTP_HOST, SMTP_USER, SMTP_PASS env vars on Render.'
+  });
+});
+
+// Test email endpoint
+app.post('/api/email-test', async (req, res) => {
+  if (!transporter) {
+    return res.status(400).json({ success: false, error: 'SMTP not configured' });
+  }
+  const { to } = req.body;
+  if (!to) return res.status(400).json({ success: false, error: 'Email address required' });
+  try {
+    await transporter.sendMail({
+      from: `"Astra Musica" <${SMTP_FROM}>`,
+      to,
+      subject: 'Astra Musica — SMTP Test',
+      html: `<p>Hi! This is a test email from Astra Musica. If you received this, your SMTP configuration is working correctly.</p>`
+    });
+    console.log(`[EMAIL] Test email sent to ${to}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[EMAIL] Test email failed:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Division Logos

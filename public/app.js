@@ -718,10 +718,27 @@ async function updateDivisionLogo(div) {
   toast(`${divisions[div].name} logo saved!`);
 }
 
-function renderNotificationSettings() {
+async function renderNotificationSettings() {
   const emailStatus = $('emailStatus');
-  if (emailStatus) {
-    emailStatus.innerHTML = '<span style="color:var(--brand-gold);">⚠️ Disabled — add SMTP env vars on Render</span>';
+  const testEmailWrap = $('testEmailWrap');
+
+  // Fetch real status from server
+  try {
+    const status = await apiGet('/api/email-status');
+    if (emailStatus) {
+      if (status.enabled) {
+        emailStatus.innerHTML = `<span style="color:#6bff6b;">✓ Enabled — ${status.host}</span>`;
+      } else {
+        emailStatus.innerHTML = `<span style="color:#ff6b6b;">✗ ${status.message}</span>`;
+      }
+    }
+    if (testEmailWrap) {
+      testEmailWrap.style.display = status.enabled ? 'block' : 'none';
+    }
+  } catch (e) {
+    if (emailStatus) {
+      emailStatus.innerHTML = '<span style="color:var(--brand-gold);">⚠️ Could not check status</span>';
+    }
   }
 
   const waContainer = $('whatsappNotifyList');
@@ -740,6 +757,23 @@ function renderNotificationSettings() {
   });
   html += '</div>';
   waContainer.innerHTML = html || '<p style="font-size:13px;color:rgba(255,255,255,0.4);">No judges assigned yet.</p>';
+}
+
+async function sendTestEmail() {
+  const to = $('testEmailInput').value.trim();
+  if (!to) { toast('Enter an email address', 'error'); return; }
+  toast('Sending test email...');
+  try {
+    const res = await apiPost('/api/email-test', { to });
+    if (res.success) {
+      toast('Test email sent! Check your inbox (and spam).');
+      $('testEmailInput').value = '';
+    } else {
+      toast(res.error || 'Failed to send', 'error');
+    }
+  } catch (e) {
+    toast('Failed to send test email', 'error');
+  }
 }
 
 // ===================== MANUAL SUBMISSION =====================
