@@ -3,7 +3,6 @@ const path = require('path');
 const axios = require('axios');
 const XLSX = require('xlsx');
 const { MongoClient } = require('mongodb');
-const nodemailer = require('nodemailer');
 
 const app = express();
 
@@ -25,58 +24,46 @@ const FB_ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN || '';
 const MONGODB_URI = process.env.MONGODB_URI || '';
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
 
-// SMTP Config for judge notifications
-const SMTP_HOST = process.env.SMTP_HOST || '';
-const SMTP_PORT = process.env.SMTP_PORT || 587;
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
+// Email config (Brevo REST API — uses HTTPS, bypasses Render SMTP blocks)
 const SMTP_FROM = process.env.SMTP_FROM || 'astra-musica@notifications.com';
+const BREVO_API_KEY = process.env.SMTP_PASS || '';
 
-let transporter = null;
 let emailEnabled = false;
 
-async function setupSMTP() {
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-    console.log('[EMAIL] No SMTP config — email notifications disabled. Set SMTP_HOST, SMTP_USER, SMTP_PASS env vars.');
+async function setupEmail() {
+  if (!BREVO_API_KEY) {
+    console.log('[EMAIL] No Brevo API key — email notifications disabled. Set SMTP_PASS to your Brevo API key.');
     return;
   }
-
-  transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT == 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    socketTimeout: 5000
-  });
-
-  console.log('[EMAIL] Testing SMTP connection to', SMTP_HOST + ':' + SMTP_PORT, '...');
-
+  console.log('[EMAIL] Testing Brevo API connection...');
   try {
-    await Promise.race([
-      new Promise((resolve, reject) => {
-        transporter.verify((err, success) => {
-          if (err) reject(err);
-          else resolve(success);
-        });
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP verify timeout after 5s')), 5000))
-    ]);
-    console.log('[EMAIL] SMTP transporter configured and verified ✓');
+    const testRes = await axios.get('https://api.brevo.com/v3/account', {
+      headers: { 'api-key': BREVO_API_KEY },
+      timeout: 10000
+    });
+    console.log('[EMAIL] Brevo API connected ✓ Account:', testRes.data.email);
     emailEnabled = true;
   } catch (err) {
-    console.error('[EMAIL] SMTP verification FAILED:', err.message);
-    if (err.message.includes('Invalid login') || err.message.includes('Authentication')) {
-      console.error('[EMAIL] → Wrong password. Double-check SMTP_PASS. If using Gmail, use an App Password (no spaces).');
-    } else if (err.message.includes('timeout') || err.message.includes('ETIMEDOUT') || err.message.includes('ECONNREFUSED')) {
-      console.error('[EMAIL] → Connection timeout. Render may be blocking outbound SMTP on port', SMTP_PORT);
-      console.error('[EMAIL] → Try port 465 with secure:true, or switch to a transactional email service (Brevo, SendGrid).');
-    } else if (err.message.includes('self signed certificate')) {
-      console.error('[EMAIL] → SSL certificate issue. This is common with Brevo — try adding tls: { rejectUnauthorized: false }');
+    console.error('[EMAIL] Brevo API connection FAILED:', err.response?.data?.message || err.message);
+    if (err.response?.status === 401) {
+      console.error('[EMAIL] → Invalid API key. Copy the exact key from Brevo → SMTP & API → SMTP key.');
     }
     emailEnabled = false;
   }
+}
+
+async function sendBrevoEmail({ to, subject, html }) {
+  if (!emailEnabled || !BREVO_API_KEY) throw new Error('Brevo not configured');
+  const res = await axios.post('https://api.brevo.com/v3/smtp/email', {
+    sender: { email: SMTP_FROM, name: 'Astra Musica' },
+    to: [{ email: to }],
+    subject,
+    htmlContent: html
+  }, {
+    headers: { 'api-key': BREVO_API_KEY, 'Content-Type': 'application/json' },
+    timeout: 15000
+  });
+  return res.data;
 }
 
 // ===================== DIVISIONS =====================
@@ -265,8 +252,8 @@ function getWeekId() {
 
 // ===================== NOTIFICATIONS =====================
 async function notifyJudgesOfSubmission(submission) {
-  if (!transporter || !emailEnabled) {
-    console.log('[EMAIL] SMTP not ready — skipping judge notification. Status: enabled=' + emailEnabled + ', transporter=' + !!transporter);
+  if (!emailEnabled) {
+    console.log('[EMAIL] Email not enabled — skipping judge notification');
     return;
   }
 
@@ -283,8 +270,7 @@ async function notifyJudgesOfSubmission(submission) {
 
   for (const judge of relevantJudges) {
     try {
-      const mailOptions = {
-        from: `"Astra Musica" <${SMTP_FROM}>`,
+      await sendBrevoEmail({
         to: judge.email,
         subject: `New Submission in ${divisions[judge.division]?.name || judge.division}`,
         html: `
@@ -303,7 +289,7 @@ async function notifyJudgesOfSubmission(submission) {
                 <p style="margin:0;font-size:14px;"><b>Week:</b> ${submission.weekId}</p>
               </div>
               <div style="text-align:center;margin:24px 0;">
-                <a href="https://astra-musica.onrender.com" style="background:#d4af37;color:#1a1a2e;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;display:inline-block;">Open Judge Panel</a>
+                <a href="https://astra-musica-v2.onrender.com" style="background:#d4af37;color:#1a1a2e;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;display:inline-block;">Open Judge Panel</a>
               </div>
               <p style="font-size:12px;color:#888;margin-top:20px;border-top:1px solid #eee;padding-top:12px;">
                 You received this because you are a judge for the ${divisions[judge.division]?.name || judge.division} division on Astra Musica.
@@ -311,12 +297,10 @@ async function notifyJudgesOfSubmission(submission) {
             </div>
           </div>
         `
-      };
-
-      await transporter.sendMail(mailOptions);
+      });
       console.log(`[EMAIL] Notification sent to ${judge.email} for submission #${submission.id}`);
     } catch (err) {
-      console.error(`[EMAIL] Failed to notify ${judge.email}:`, err.message);
+      console.error(`[EMAIL] Failed to notify ${judge.email}:`, err.response?.data?.message || err.message);
     }
   }
 }
@@ -465,33 +449,32 @@ app.get('/api/all-data', (req, res) => {
 app.get('/api/email-status', (req, res) => {
   res.json({
     enabled: emailEnabled,
-    host: SMTP_HOST || null,
+    provider: 'Brevo API',
     from: SMTP_FROM,
     message: emailEnabled
-      ? 'SMTP is configured and verified. Judges will receive emails on new submissions.'
-      : 'SMTP not configured or verification failed. Add SMTP_HOST, SMTP_USER, SMTP_PASS env vars on Render.'
+      ? 'Brevo API is connected. Judges will receive emails on new submissions.'
+      : 'Brevo API key not set or invalid. Set SMTP_PASS to your Brevo API key on Render.'
   });
 });
 
 // Test email endpoint
 app.post('/api/email-test', async (req, res) => {
-  if (!transporter) {
-    return res.status(400).json({ success: false, error: 'SMTP not configured' });
+  if (!emailEnabled) {
+    return res.status(400).json({ success: false, error: 'Email not configured' });
   }
   const { to } = req.body;
   if (!to) return res.status(400).json({ success: false, error: 'Email address required' });
   try {
-    await transporter.sendMail({
-      from: `"Astra Musica" <${SMTP_FROM}>`,
+    await sendBrevoEmail({
       to,
       subject: 'Astra Musica — SMTP Test',
-      html: `<p>Hi! This is a test email from Astra Musica. If you received this, your SMTP configuration is working correctly.</p>`
+      html: '<p>Hi! This is a test email from Astra Musica. If you received this, your Brevo API configuration is working correctly.</p>'
     });
     console.log(`[EMAIL] Test email sent to ${to}`);
     res.json({ success: true });
   } catch (err) {
-    console.error('[EMAIL] Test email failed:', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[EMAIL] Test email failed:', err.response?.data?.message || err.message);
+    res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
   }
 });
 
@@ -605,7 +588,7 @@ async function start() {
     await loadFromDB();
   }
 
-  await setupSMTP();
+  await setupEmail();
 
   pollFacebook();
   setInterval(pollFacebook, POLL_INTERVAL_MS);
@@ -615,7 +598,7 @@ async function start() {
     console.log(`Astra Musica v2 running on port ${PORT}`);
     console.log(`Database: ${dbConnected ? 'MongoDB Atlas ✓' : 'Memory-only (data resets on sleep)'}`);
     console.log(`Week: ${currentWeekId} | FB polling: ${FB_PAGE_ID && FB_ACCESS_TOKEN ? 'ON' : 'OFF'}`);
-    console.log(`Email notifications: ${transporter ? 'ON ✓' : 'OFF (set SMTP_HOST, SMTP_USER, SMTP_PASS)'}`);
+    console.log(`Email notifications: ${emailEnabled ? 'ON ✓ (Brevo API)' : 'OFF (set SMTP_PASS to Brevo API key)'}`);
   });
 }
 
