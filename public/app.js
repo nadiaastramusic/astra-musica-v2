@@ -112,6 +112,7 @@ async function loadData() {
   challengeImages = allData.challengeImages || {};
   divisionLogos = allData.divisionLogos || {};
   teamMembers = allData.teamMembers || [];
+  judges = await apiGet('/api/judges');
 }
 
 // ===================== NAVIGATION =====================
@@ -148,6 +149,7 @@ function goBack() {
   $('headerBadge').innerHTML = '';
   setBodyClass('main-page');
   showScreen('screenRole');
+  renderTeamMembers();
 }
 
 // ===================== JUDGE =====================
