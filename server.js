@@ -22,6 +22,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const FB_PAGE_ID = process.env.FB_PAGE_ID || '';
 const FB_ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN || '';
 const MONGODB_URI = process.env.MONGODB_URI || '';
+const BASE_URL = process.env.BASE_URL || 'https://astra-musica-v2.onrender.com';
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
 
 // Email config (Brevo REST API — uses HTTPS, bypasses Render SMTP blocks)
@@ -287,25 +288,32 @@ async function notifyJudgesOfSubmission(submission) {
         to: judge.email,
         subject: `New Submission in ${divisions[judge.division]?.name || judge.division}`,
         html: `
-          <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;color:#333;">
-            <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:24px;border-radius:12px 12px 0 0;text-align:center;">
-              <h2 style="color:#d4af37;margin:0;">Astra Musica</h2>
-              <p style="color:rgba(255,255,255,0.7);margin:8px 0 0 0;font-size:14px;">New Submission Alert</p>
+          <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#333;">
+            <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:28px;border-radius:12px 12px 0 0;text-align:center;">
+              <h2 style="color:#d4af37;margin:0;font-size:22px;">Astra Musica</h2>
+              <p style="color:rgba(255,255,255,0.7);margin:8px 0 0 0;font-size:14px;">🎵 New Submission Alert</p>
             </div>
-            <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;border:1px solid #e0e0e0;border-top:none;">
+            <div style="background:#fff;padding:28px;border-radius:0 0 12px 12px;border:1px solid #e0e0e0;border-top:none;">
               <p style="font-size:15px;margin-bottom:16px;">Hi <b>${judge.name}</b>,</p>
               <p style="font-size:14px;line-height:1.6;">A new song has been submitted to your division and is ready for scoring.</p>
-              <div style="background:#f8f9fa;padding:16px;border-radius:8px;margin:16px 0;">
+
+              <div style="background:#f8f9fa;padding:16px;border-radius:8px;margin:20px 0;border-left:4px solid #d4af37;">
                 <p style="margin:0 0 8px 0;font-size:14px;"><b>Artist:</b> ${submission.author}</p>
                 <p style="margin:0 0 8px 0;font-size:14px;"><b>Title:</b> ${submission.title}</p>
                 <p style="margin:0 0 8px 0;font-size:14px;"><b>Division:</b> ${divNames}</p>
                 <p style="margin:0;font-size:14px;"><b>Week:</b> ${submission.weekId}</p>
               </div>
-              <div style="text-align:center;margin:24px 0;">
-                <a href="https://astra-musica-v2.onrender.com" style="background:#d4af37;color:#1a1a2e;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;display:inline-block;">Open Judge Panel</a>
+
+              <div style="text-align:center;margin:28px 0;padding:20px;background:#faf8f0;border-radius:10px;border:1px solid #e8e0c8;">
+                <p style="font-size:13px;color:#666;margin:0 0 12px 0;font-weight:600;">👇 Click below to open Astra Musica and score this song</p>
+                <a href="${BASE_URL}" style="background:#d4af37;color:#1a1a2e;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:800;font-size:15px;display:inline-block;box-shadow:0 4px 12px rgba(212,175,55,0.3);">Open Astra Musica →</a>
+                <p style="font-size:12px;color:#888;margin:12px 0 0 0;word-break:break-all;">
+                  <a href="${BASE_URL}" style="color:#666;text-decoration:underline;">${BASE_URL}</a>
+                </p>
               </div>
+
               <p style="font-size:12px;color:#888;margin-top:20px;border-top:1px solid #eee;padding-top:12px;">
-                You received this because you are a judge for the ${divisions[judge.division]?.name || judge.division} division on Astra Musica.
+                You received this because you are a judge for the <b>${divisions[judge.division]?.name || judge.division}</b> division on Astra Musica.
               </p>
             </div>
           </div>
