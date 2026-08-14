@@ -113,6 +113,7 @@ async function loadData() {
   challengeImages = allData.challengeImages || {};
   divisionLogos = allData.divisionLogos || {};
   teamMembers = allData.teamMembers || [];
+  judges = await apiGet('/api/judges');
 }
 
 // ===================== NAVIGATION =====================
@@ -149,6 +150,7 @@ function goBack() {
   $('headerBadge').innerHTML = '';
   setBodyClass('main-page');
   showScreen('screenRole');
+  renderTeamMembers();
 }
 
 // ===================== JUDGE =====================
@@ -204,14 +206,6 @@ async function changeAdminPassword() {
   } catch (e) {
     toast('Incorrect current password', 'error');
   }
-}
-
-
-function setJudgeTab(tab) {
-  judgeTab = tab;
-  document.querySelectorAll('#screenJudge .tab').forEach(t => t.classList.remove('active'));
-  $('tabJudge' + (tab === 'top20' ? 'Top20' : 'Challenge')).classList.add('active');
-  renderJudgePanel();
 }
 
 function renderJudgePanel() {
@@ -1159,6 +1153,13 @@ async function finishJudgeEdit(id, updates) {
 }
 
 // Override renderJudgePanel to show judge photo
+function setJudgeTab(tab) {
+  judgeTab = tab;
+  document.querySelectorAll('#screenJudge .tab').forEach(t => t.classList.remove('active'));
+  $('tabJudge' + (tab === 'top20' ? 'Top20' : 'Challenge')).classList.add('active');
+  renderJudgePanel();
+}
+
 function renderJudgePanel() {
   const container = $('judgeSubmissions');
   const divColor = divisions[currentJudge.division].color;
@@ -1273,6 +1274,7 @@ function renderJudgePanel() {
     `;
   }).join('');
 }
+
 
 // ===================== INIT =====================
 async function init() {
