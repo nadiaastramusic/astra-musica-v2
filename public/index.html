@@ -221,6 +221,7 @@
           <div class="form-group"><label>Name</label><input type="text" id="newJudgeName" placeholder="Judge Name"></div>
           <div class="form-group"><label>Email</label><input type="email" id="newJudgeEmail" placeholder="judge@email.com"></div>
           <div class="form-group"><label>Password</label><input type="text" id="newJudgePassword" placeholder="Set their password"></div>
+          <div class="form-group"><label>Photo</label><input type="file" id="newJudgePhoto" accept="image/*"><img id="newJudgePhotoPreview" style="display:none;width:50px;height:50px;object-fit:cover;border-radius:8px;margin-top:6px;"></div>
           <div class="form-group">
             <label>Division</label>
             <select id="newJudgeDivision">
@@ -309,6 +310,19 @@
         <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">🏷️ Division Logos</h3>
         <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;">Set a unique logo for each division. These appear on the public leaderboard and challenge pages.</p>
         <div id="divisionLogosList"></div>
+      </div>
+
+      <div class="card mt-2" style="max-width:500px;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--brand-gold);">👥 Astra Musica Team</h3>
+        <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;">Add admins, managers, and key people. They appear on the login screen for everyone to see.</p>
+        <div class="manual-form">
+          <div class="form-group"><label>Name *</label><input type="text" id="tmName" placeholder="e.g. Nadia van der Merwe"></div>
+          <div class="form-group"><label>Role *</label><input type="text" id="tmRole" placeholder="e.g. Competition Director"></div>
+          <div class="form-group full"><label>Bio / Description</label><input type="text" id="tmBio" placeholder="Short bio..."></div>
+          <div class="form-group full"><label>Photo</label><input type="file" id="tmPhoto" accept="image/*"><img id="tmPhotoPreview" style="display:none;width:60px;height:60px;object-fit:cover;border-radius:8px;margin-top:8px;"></div>
+          <div class="form-group full"><button class="btn btn-gold" onclick="addTeamMember()">➕ Add Team Member</button></div>
+        </div>
+        <div id="teamMembersList" style="margin-top:16px;"></div>
       </div>
 
       <div class="card mt-2" style="max-width:500px;">

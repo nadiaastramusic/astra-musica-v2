@@ -86,6 +86,7 @@ let resultsRevealed = false;
 let revealTime = new Date('2026-08-14T20:00:00').getTime();
 let currentWeekId = '2026-W33';
 let challengeImages = {};
+let teamMembers = [];
 let nextId = 1;
 
 // ===================== MONGODB =====================
@@ -138,6 +139,9 @@ async function loadFromDB() {
 
     const imagesDoc = await db.collection('challengeImages').findOne({ _id: 'all' });
     if (imagesDoc) challengeImages = imagesDoc.data || {};
+
+    const teamDoc = await db.collection('teamMembers').findOne({ _id: 'all' });
+    if (teamDoc) teamMembers = teamDoc.data || [];
 
     console.log('[DB] Loaded from MongoDB:', {
       judges: Object.keys(judges).length,
@@ -192,6 +196,15 @@ async function saveScores() {
   await db.collection('scores').updateOne(
     { _id: 'all' },
     { $set: { data: scores } },
+    { upsert: true }
+  );
+}
+
+async function saveTeamMembers() {
+  if (!db) return;
+  await db.collection('teamMembers').updateOne(
+    { _id: 'all' },
+    { $set: { data: teamMembers } },
     { upsert: true }
   );
 }
@@ -341,20 +354,32 @@ app.delete('/api/submissions/:id', async (req, res) => {
 app.get('/api/judges', (req, res) => {
   const safe = {};
   for (const [k, v] of Object.entries(judges)) {
-    safe[k] = { name: v.name, email: v.email, division: v.division, hasSetPassword: v.hasSetPassword };
+    safe[k] = { name: v.name, email: v.email, division: v.division, photo: v.photo || '', hasSetPassword: v.hasSetPassword };
   }
   res.json(safe);
 });
 
 app.post('/api/judges', async (req, res) => {
-  const { name, email, division, password } = req.body;
+  const { name, email, division, password, photo } = req.body;
   if (!name || !email || !division || !password) {
     return res.status(400).json({ error: 'Name, email, division, and password are required' });
   }
   const id = 'judge' + (Object.keys(judges).length + 1);
-  judges[id] = { name, email, division, password, hasSetPassword: false };
+  judges[id] = { name, email, division, password, photo: photo || '', hasSetPassword: false };
   await saveJudges();
   res.json({ id, name, email, division });
+});
+
+app.put('/api/judges/:id', async (req, res) => {
+  const id = req.params.id;
+  if (!judges[id]) return res.status(404).json({ error: 'Judge not found' });
+  const { name, email, division, photo } = req.body;
+  if (name) judges[id].name = name;
+  if (email) judges[id].email = email;
+  if (division) judges[id].division = division;
+  if (photo !== undefined) judges[id].photo = photo;
+  await saveJudges();
+  res.json({ success: true, judge: { name: judges[id].name, email: judges[id].email, division: judges[id].division, photo: judges[id].photo } });
 });
 
 app.delete('/api/judges/:id', async (req, res) => {
@@ -441,7 +466,8 @@ app.get('/api/all-data', (req, res) => {
     rankings: getRankings(),
     challengeSubs: getChallengeSubs(),
     challengeImages,
-    divisionLogos
+    divisionLogos,
+    teamMembers
   });
 });
 
@@ -476,6 +502,32 @@ app.post('/api/email-test', async (req, res) => {
     console.error('[EMAIL] Test email failed:', err.response?.data?.message || err.message);
     res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
   }
+});
+
+// Team Members
+app.get('/api/team-members', (req, res) => res.json(teamMembers));
+
+app.post('/api/team-members', async (req, res) => {
+  const { name, role, bio, photo } = req.body;
+  if (!name || !role) return res.status(400).json({ error: 'Name and role required' });
+  const member = { id: 'tm' + (teamMembers.length + 1), name, role, bio: bio || '', photo: photo || '' };
+  teamMembers.push(member);
+  await saveTeamMembers();
+  res.json({ success: true, member });
+});
+
+app.post('/api/team-members/replace', async (req, res) => {
+  const { members } = req.body;
+  if (!Array.isArray(members)) return res.status(400).json({ error: 'Members array required' });
+  teamMembers = members;
+  await saveTeamMembers();
+  res.json({ success: true });
+});
+
+app.delete('/api/team-members/:id', async (req, res) => {
+  teamMembers = teamMembers.filter(m => m.id !== req.params.id);
+  await saveTeamMembers();
+  res.json({ success: true });
 });
 
 // Division Logos
