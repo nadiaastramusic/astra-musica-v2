@@ -20,6 +20,7 @@ let currentWeekId = '2026-W33';
 let publicDivFilter = 'all';
 let publicTab = 'top20';
 let adminDivFilter = 'all';
+let judgeTab = 'top20';
 let challengeImages = {};
 let divisionLogos = {};
 let teamMembers = [];
@@ -112,7 +113,6 @@ async function loadData() {
   challengeImages = allData.challengeImages || {};
   divisionLogos = allData.divisionLogos || {};
   teamMembers = allData.teamMembers || [];
-  judges = await apiGet('/api/judges');
 }
 
 // ===================== NAVIGATION =====================
@@ -149,7 +149,6 @@ function goBack() {
   $('headerBadge').innerHTML = '';
   setBodyClass('main-page');
   showScreen('screenRole');
-  renderTeamMembers();
 }
 
 // ===================== JUDGE =====================
@@ -205,6 +204,14 @@ async function changeAdminPassword() {
   } catch (e) {
     toast('Incorrect current password', 'error');
   }
+}
+
+
+function setJudgeTab(tab) {
+  judgeTab = tab;
+  document.querySelectorAll('#screenJudge .tab').forEach(t => t.classList.remove('active'));
+  $('tabJudge' + (tab === 'top20' ? 'Top20' : 'Challenge')).classList.add('active');
+  renderJudgePanel();
 }
 
 function renderJudgePanel() {
@@ -1154,11 +1161,10 @@ async function finishJudgeEdit(id, updates) {
 // Override renderJudgePanel to show judge photo
 function renderJudgePanel() {
   const container = $('judgeSubmissions');
-  const divSubs = getSubsForDivision(currentJudge.division);
   const divColor = divisions[currentJudge.division].color;
 
+  // Judge photo header
   let headerHtml = '';
-  // Find this judge's photo from the judges data
   const judgeObj = Object.values(judges).find(j => j.email === currentJudge.email);
   if (judgeObj && judgeObj.photo) {
     headerHtml = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding:16px;background:rgba(255,255,255,0.05);border-radius:12px;border-left:4px solid ${divColor};">
@@ -1170,8 +1176,23 @@ function renderJudgePanel() {
     </div>`;
   }
 
+  // Get submissions based on active tab
+  let divSubs = [];
+  let emptyMessage = '';
+  if (judgeTab === 'top20') {
+    divSubs = getSubsForDivision(currentJudge.division);
+    emptyMessage = 'No Top 20 submissions yet for this division.';
+  } else {
+    divSubs = submissions.filter(s =>
+      s.weekId === currentWeekId &&
+      s.entryType === 'challenge' &&
+      s.challengeDivision === currentJudge.division
+    );
+    emptyMessage = 'No challenge submissions yet for this division.';
+  }
+
   if (divSubs.length === 0) {
-    container.innerHTML = headerHtml + '<p class="text-center text-tertiary" style="padding:40px;font-size:16px;">No submissions yet for this division.</p>';
+    container.innerHTML = headerHtml + `<p class="text-center text-tertiary" style="padding:40px;font-size:16px;">${emptyMessage}</p>`;
     return;
   }
 
@@ -1251,13 +1272,6 @@ function renderJudgePanel() {
       </div>
     `;
   }).join('');
-}
-
-// Override renderAdminSettings to show team members
-function renderAdminSettings() {
-  renderDivisionLogoSettings();
-  renderNotificationSettings();
-  renderAdminTeamMembers();
 }
 
 // ===================== INIT =====================
