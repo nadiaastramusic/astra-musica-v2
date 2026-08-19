@@ -5,6 +5,7 @@ const divisions = {
   afrikaans: { name: 'Afrikaans', color: '#228B22' },
   gospel: { name: 'Gospel', color: '#8B4513' },
   praiseandworship: { name: 'Praise & Worship', color: '#800080' },
+  gospelpraise: { name: 'Gospel & Praise', color: '#8B4513' },
   liveartists: { name: 'Live Artists', color: '#008080' }
 };
 
@@ -14,6 +15,7 @@ let currentJudge = null;
 let adminLoggedIn = false;
 let submissions = [];
 let scores = {};
+let judges = {};
 let resultsRevealed = false;
 let revealTime = new Date('2026-08-14T20:00:00').getTime();
 let currentWeekId = '2026-W33';
@@ -21,10 +23,12 @@ let publicDivFilter = 'all';
 let publicTab = 'top20';
 let adminDivFilter = 'all';
 let judgeTab = 'top20';
+let currentGospelSubTab = 'gospel';
 let challengeImages = {};
 let divisionLogos = {};
 let teamMembers = [];
 let emailEnabled = false;
+let editingScores = {};
 
 // ===================== UTILS =====================
 function $(id) { return document.getElementById(id); }
@@ -36,6 +40,7 @@ function showScreen(id) {
 }
 function toast(msg, type='success') {
   const t = $('toast');
+  if (!t) return;
   t.textContent = msg;
   t.className = 'toast show ' + type;
   setTimeout(() => t.classList.remove('show'), 3000);
@@ -45,6 +50,7 @@ function getAverageScore(subId) {
   const subScores = scores[subId];
   if (!subScores) return null;
   const all = Object.values(subScores).map(s => s.total);
+  if (all.length === 0) return null;
   return Math.round(all.reduce((a,b) => a+b, 0) / all.length);
 }
 
@@ -68,7 +74,11 @@ function getChallengeSubs(weekId = currentWeekId) {
 }
 
 function getSubsForDivision(div, weekId = currentWeekId) {
-  return submissions.filter(s => s.weekId === weekId && s.tags.includes(div) && s.entryType === 'top20');
+  let subs = submissions.filter(s => s.weekId === weekId);
+  if (div === 'gospelpraise') {
+    return subs.filter(s => s.tags && s.tags.includes(currentGospelSubTab));
+  }
+  return subs.filter(s => s.tags && s.tags.includes(div));
 }
 
 function formatDate(ts) {
@@ -153,6 +163,17 @@ function goBack() {
   renderTeamMembers();
 }
 
+function renderTeamMembers() {
+  const el = $('teamMembersList');
+  if (!el) return;
+  el.innerHTML = teamMembers.map(m => `
+    <div class="team-card">
+      <img src="${m.photo || ''}" alt="${m.name}">
+      <div><b>${m.name}</b> - ${m.role}</div>
+    </div>
+  `).join('');
+}
+
 // ===================== JUDGE =====================
 async function loginJudge() {
   const email = $('judgeEmail').value.trim();
@@ -161,15 +182,15 @@ async function loginJudge() {
     const res = await apiPost('/api/judges/login', { email, password: pw });
     if (res.error) throw new Error(res.error);
     currentJudge = res;
-    const divColor = divisions[currentJudge.division].color;
-    $('headerBadge').innerHTML = `<span class="badge" style="border-color:${divColor};color:${divColor};">Judge · ${divisions[currentJudge.division].name}</span>`;
-    $('judgeDivisionName').textContent = divisions[currentJudge.division].name;
+    const divColor = divisions[currentJudge.division]?.color || '#d4af37';
+    $('headerBadge').innerHTML = `<span class="badge" style="border-color:${divColor};color:${divColor};">Judge · ${divisions[currentJudge.division]?.name || 'Judge'}</span>`;
+    $('judgeDivisionName').textContent = divisions[currentJudge.division]?.name || currentJudge.division;
     $('judgeDivisionName').style.color = divColor;
     setBodyClass('div-' + currentJudge.division);
     showScreen('screenJudge');
     renderJudgePanel();
   } catch (e) {
-    $('loginError').style.display = 'block';
+    if ($('loginError')) $('loginError').style.display = 'block';
   }
 }
 
@@ -183,7 +204,7 @@ async function loginAdmin() {
     showScreen('screenAdmin');
     setAdminTab('submissions');
   } catch (e) {
-    $('adminLoginError').style.display = 'block';
+    if ($('adminLoginError')) $('adminLoginError').style.display = 'block';
   }
 }
 
@@ -208,7 +229,23 @@ async function changeAdminPassword() {
   }
 }
 
+function renderGospelPraiseSubTabs() {
+  const container = $('gospelPraiseTabs');
+  if (!container || currentJudge?.division !== 'gospelpraise') return;
+  container.innerHTML = `
+    <button class="tab ${currentGospelSubTab === 'gospel' ? 'active' : ''}" onclick="switchGospelSubTab('gospel')">Gospel</button>
+    <button class="tab ${currentGospelSubTab === 'praiseandworship' ? 'active' : ''}" onclick="switchGospelSubTab('praiseandworship')">Praise & Worship</button>
+  `;
+}
+
+function switchGospelSubTab(subTab) {
+  currentGospelSubTab = subTab;
+  renderJudgePanel();
+}
+
 function renderJudgePanel() {
+  renderGospelPraiseSubTabs();
+
   const container = $('judgeSubmissions');
   const divSubs = getSubsForDivision(currentJudge.division);
 
@@ -221,7 +258,9 @@ function renderJudgePanel() {
     const myScore = scores[sub.id]?.[currentJudge.name];
     const isScored = !!myScore;
     const c = myScore ? myScore.criteria : [0,0,0,0];
-    const divColor = divisions[currentJudge.division].color;
+    
+    const activeDivKey = currentJudge.division === 'gospelpraise' ? currentGospelSubTab : currentJudge.division;
+    const divColor = divisions[activeDivKey]?.color || '#d4af37';
     const total = isScored ? myScore.total : Math.round(((c[0]+c[1]+c[2]+c[3])/40)*100);
 
     return `
@@ -295,8 +334,6 @@ function renderJudgePanel() {
     `;
   }).join('');
 }
-
-let editingScores = {};
 
 function adjustScore(subId, criterion, delta) {
   const criteriaMap = { 'vocals': 0, 'production': 1, 'originality': 2, 'impact': 3 };
@@ -379,7 +416,7 @@ function setPublicTab(tab) {
 function setPublicDiv(div) {
   publicDivFilter = div;
   document.querySelectorAll('#publicDivTabs .div-tab').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+  if (event && event.target) event.target.classList.add('active');
 
   if (div === 'all') {
     setBodyClass('main-page');
@@ -404,7 +441,6 @@ function renderTop20() {
     const divColor = divisions[div].color;
     const divLogo = divisionLogos[div];
 
-    // Find judges for this division
     const divJudges = Object.values(judges).filter(j => j.division === div);
 
     html += `<div class="div-header" style="border-color:${divColor}40;">`;
@@ -413,7 +449,6 @@ function renderTop20() {
     }
     html += `<div style="flex:1;"><h2 style="color:${divColor};margin:0;">${divisions[div].name}</h2><p style="margin:4px 0 0 0;color:rgba(255,255,255,0.5);font-size:13px;">Top 20 Submissions</p></div>`;
 
-    // Show judge photos
     if (divJudges.length > 0) {
       html += `<div style="display:flex;gap:6px;align-items:center;margin-left:auto;">`;
       divJudges.forEach(j => {
@@ -463,7 +498,6 @@ function renderChallenges() {
     const img = challengeImages[currentWeekId]?.[div];
     const divLogo = divisionLogos[div];
 
-    // Find judges for this division
     const divJudges = Object.values(judges).filter(j => j.division === div);
 
     html += `<div class="div-header" style="border-color:${divisions[div].color}40;">`;
@@ -472,7 +506,6 @@ function renderChallenges() {
     }
     html += `<div style="flex:1;"><h2 style="color:${divisions[div].color};margin:0;">${divisions[div].name} Challenge</h2><p style="margin:4px 0 0 0;color:rgba(255,255,255,0.5);font-size:13px;">Weekly Challenge Entries</p></div>`;
 
-    // Show judge photos
     if (divJudges.length > 0) {
       html += `<div style="display:flex;gap:6px;align-items:center;margin-left:auto;">`;
       divJudges.forEach(j => {
@@ -517,9 +550,6 @@ function renderChallenges() {
 }
 
 function renderResults() {
-  const countdownWrap = $('resultsCountdownWrap');
-  const content = $('resultsContent');
-
   if (!resultsRevealed) {
     show('resultsCountdownWrap'); hide('resultsContent');
     updateCountdown();
@@ -531,11 +561,11 @@ function renderResults() {
       return;
     }
     $('podium1Name').textContent = rankings[0]?.title || '—';
-    $('podium1Score').textContent = rankings[0]?.avg + '%' || '—';
+    $('podium1Score').textContent = rankings[0]?.avg !== undefined ? rankings[0].avg + '%' : '—';
     $('podium2Name').textContent = rankings[1]?.title || '—';
-    $('podium2Score').textContent = rankings[1]?.avg + '%' || '—';
+    $('podium2Score').textContent = rankings[1]?.avg !== undefined ? rankings[1].avg + '%' : '—';
     $('podium3Name').textContent = rankings[2]?.title || '—';
-    $('podium3Score').textContent = rankings[2]?.avg + '%' || '—';
+    $('podium3Score').textContent = rankings[2]?.avg !== undefined ? rankings[2].avg + '%' : '—';
 
     $('resultsList').innerHTML = rankings.slice(3).map((sub, idx) => `
       <div class="submission-row">
@@ -557,17 +587,17 @@ function updateCountdown() {
   if (resultsRevealed) return;
   const diff = revealTime - Date.now();
   if (diff <= 0) {
-    ['Days','Hours','Mins','Secs'].forEach(u => $(`cd${u}`).textContent = '00');
+    ['Days','Hours','Mins','Secs'].forEach(u => { if ($(`cd${u}`)) $(`cd${u}`).textContent = '00'; });
     return;
   }
   const d = Math.floor(diff / 86400000);
   const h = Math.floor((diff % 86400000) / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
   const s = Math.floor((diff % 60000) / 1000);
-  $('cdDays').textContent = String(d).padStart(2,'0');
-  $('cdHours').textContent = String(h).padStart(2,'0');
-  $('cdMins').textContent = String(m).padStart(2,'0');
-  $('cdSecs').textContent = String(s).padStart(2,'0');
+  if ($('cdDays')) $('cdDays').textContent = String(d).padStart(2,'0');
+  if ($('cdHours')) $('cdHours').textContent = String(h).padStart(2,'0');
+  if ($('cdMins')) $('cdMins').textContent = String(m).padStart(2,'0');
+  if ($('cdSecs')) $('cdSecs').textContent = String(s).padStart(2,'0');
 }
 setInterval(updateCountdown, 1000);
 
@@ -586,7 +616,7 @@ function setAdminTab(tab) {
 function filterAdmin(tag) {
   adminDivFilter = tag;
   document.querySelectorAll('#adminFilters .filter-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+  if (event && event.target) event.target.classList.add('active');
   renderAdminSubmissions();
 }
 
@@ -608,7 +638,7 @@ function renderAdminSubmissions() {
           </div>
           <div style="text-align:right;">
             <div style="font-size:13px;color:rgba(255,255,255,0.5);">${judgeCount} judge${judgeCount!==1?'s':''} scored</div>
-            <div style="font-size:22px;font-weight:700;color:var(--brand-gold);">${avg ? avg + '%' : '—'}</div>
+            <div style="font-size:22px;font-weight:700;color:var(--brand-gold);">${avg !== null ? avg + '%' : '—'}</div>
           </div>
         </div>
         ${sub.entryType === 'challenge' ? '<span class="challenge-badge">Challenge</span>' : ''}
@@ -633,6 +663,7 @@ async function deleteSubmission(id) {
 async function renderAdminJudges() {
   const judgesData = await apiGet('/api/judges');
   const tbody = $('judgesTable');
+  if (!tbody) return;
 
   tbody.innerHTML = Object.entries(judgesData).map(([id, j]) => {
     const scoreCount = Object.values(scores).filter(s => s[j.name]).length;
@@ -641,7 +672,7 @@ async function renderAdminJudges() {
       <tr>
         <td style="font-weight:600;">${j.name}</td>
         <td>${j.email}</td>
-        <td><span class="tag ${j.division}" style="font-size:11px;">${divisions[j.division].name}</span></td>
+        <td><span class="tag ${j.division}" style="font-size:11px;">${divisions[j.division]?.name || j.division}</span></td>
         <td><span class="status-dot active"></span>Active</td>
         <td>${j.hasSetPassword ? '✓ Changed' : 'Admin Set'}</td>
         <td>${scoreCount} / ${totalSubs}</td>
@@ -678,7 +709,7 @@ function renderAdminResults() {
   $('adminScoreSummary').innerHTML = `
     <div style="font-size:14px;margin-bottom:8px;"><span class="text-secondary">Week:</span> <b>${currentWeekId}</b></div>
     <div style="font-size:14px;margin-bottom:8px;"><span class="text-secondary">Total scored:</span> <b>${rankings.length} / ${submissions.length}</b></div>
-    <div style="font-size:14px;margin-bottom:8px;"><span class="text-secondary">Current leader:</span> <b>${rankings[0]?.title || 'None'}</b> ${rankings[0]?.avg ? '(' + rankings[0].avg + '%)' : ''}</div>
+    <div style="font-size:14px;margin-bottom:8px;"><span class="text-secondary">Current leader:</span> <b>${rankings[0]?.title || 'None'}</b> ${rankings[0]?.avg !== undefined ? '(' + rankings[0].avg + '%)' : ''}</div>
     <div style="font-size:14px;"><span class="text-secondary">Results status:</span> <b style="color:${resultsRevealed ? '#6bff6b' : 'var(--brand-gold)'}">${resultsRevealed ? 'REVEALED' : 'HIDDEN'}</b></div>
   `;
 }
@@ -715,6 +746,23 @@ function renderAdminSettings() {
   renderNotificationSettings();
 }
 
+function renderNotificationSettings() {
+  const container = $('notificationSettings');
+  if (!container) return;
+  container.innerHTML = `
+    <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;">
+      <input type="checkbox" ${emailEnabled ? 'checked' : ''} onchange="toggleEmailNotifications(this.checked)">
+      Enable Email Notifications
+    </label>
+  `;
+}
+
+async function toggleEmailNotifications(enabled) {
+  emailEnabled = enabled;
+  await apiPost('/api/admin/settings', { emailEnabled });
+  toast('Email settings saved.');
+}
+
 function renderDivisionLogoSettings() {
   const container = $('divisionLogosList');
   if (!container) return;
@@ -735,576 +783,27 @@ function renderDivisionLogoSettings() {
           <button onclick="document.getElementById('divLogoFile-${div}').click()" style="padding:8px 12px;background:rgba(255,255,255,0.1);border:none;border-radius:6px;color:white;cursor:pointer;font-size:12px;">📁</button>
           <button onclick="updateDivisionLogo('${div}')" style="padding:8px 16px;background:var(--brand-gold);border:none;border-radius:6px;color:#1a1a2e;cursor:pointer;font-size:12px;font-weight:700;">Save</button>
         </div>
-        ${currentLogo ? `<img src="${currentLogo}" style="width:60px;height:60px;object-fit:contain;margin-top:10px;border-radius:6px;background:rgba(255,255,255,0.05);padding:4px;">` : ''}
+        ${currentLogo ? `<img src="${currentLogo}" style="width:60px;height:60px;object-fit:contain;border-radius:6px;margin-top:8px;">` : ''}
       </div>
     `;
   });
   container.innerHTML = html;
 }
 
-async function handleDivLogoUpload(div, input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    $(`divLogoUrl-${div}`).value = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
 async function updateDivisionLogo(div) {
   const url = $(`divLogoUrl-${div}`).value.trim();
-  if (!url) { toast('Enter a logo URL or upload a file', 'error'); return; }
-  await apiPost('/api/division-logos', { division: div, url });
+  await apiPost('/api/admin/division-logo', { division: div, logoUrl: url });
   divisionLogos[div] = url;
+  toast('Division logo updated!');
   renderDivisionLogoSettings();
-  toast(`${divisions[div].name} logo saved!`);
 }
 
-async function renderNotificationSettings() {
-  const emailStatus = $('emailStatus');
-  const testEmailWrap = $('testEmailWrap');
-
-  // Fetch real status from server
-  try {
-    const status = await apiGet('/api/email-status');
-    if (emailStatus) {
-      if (status.enabled) {
-        emailStatus.innerHTML = `<span style="color:#6bff6b;">✓ Enabled — ${status.host}</span>`;
-      } else {
-        emailStatus.innerHTML = `<span style="color:#ff6b6b;">✗ ${status.message}</span>`;
-      }
-    }
-    if (testEmailWrap) {
-      testEmailWrap.style.display = status.enabled ? 'block' : 'none';
-    }
-  } catch (e) {
-    if (emailStatus) {
-      emailStatus.innerHTML = '<span style="color:var(--brand-gold);">⚠️ Could not check status</span>';
-    }
-  }
-
-  const waContainer = $('whatsappNotifyList');
-  if (!waContainer) return;
-
-  let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
-  Object.keys(divisions).forEach(div => {
-    const divJudges = Object.values(judges).filter(j => j.division === div);
-    if (divJudges.length === 0) return;
-    html += `<div style="margin-bottom:8px;"><p style="font-size:13px;font-weight:600;color:${divisions[div].color};margin-bottom:6px;">${divisions[div].name}</p>`;
-    divJudges.forEach(j => {
-      const msg = encodeURIComponent(`Hi ${j.name}, a new submission has been added to the ${divisions[div].name} division on Astra Musica. Please log in to score it.`);
-      html += `<a href="https://wa.me/?text=${msg}" target="_blank" style="display:inline-block;padding:6px 12px;background:rgba(37,211,102,0.15);color:#25d366;border:1px solid rgba(37,211,102,0.3);border-radius:6px;text-decoration:none;font-size:12px;margin-right:6px;margin-bottom:6px;">📱 WhatsApp ${j.name}</a>`;
-    });
-    html += '</div>';
-  });
-  html += '</div>';
-  waContainer.innerHTML = html || '<p style="font-size:13px;color:rgba(255,255,255,0.4);">No judges assigned yet.</p>';
-}
-
-async function sendTestEmail() {
-  const to = $('testEmailInput').value.trim();
-  if (!to) { toast('Enter an email address', 'error'); return; }
-  toast('Sending test email...');
-  try {
-    const res = await apiPost('/api/email-test', { to });
-    if (res.success) {
-      toast('Test email sent! Check your inbox (and spam).');
-      $('testEmailInput').value = '';
-    } else {
-      toast(res.error || 'Failed to send', 'error');
-    }
-  } catch (e) {
-    toast('Failed to send test email', 'error');
-  }
-}
-
-// ===================== MANUAL SUBMISSION =====================
-function handleImageUpload(inputId, previewId) {
-  const input = $(inputId);
-  const preview = $(previewId);
-  input.addEventListener('change', function() {
-    const file = this.files[0];
-    if (!file) return;
+function handleDivLogoUpload(div, input) {
+  if (input.files && input.files[0]) {
     const reader = new FileReader();
     reader.onload = function(e) {
-      preview.src = e.target.result;
-      preview.style.display = 'block';
-      preview.dataset.base64 = e.target.result;
+      $(`divLogoUrl-${div}`).value = e.target.result;
     };
-    reader.readAsDataURL(file);
-  });
-}
-
-async function addManualSubmission() {
-  const author = $('mAuthor').value.trim();
-  const title = $('mTitle').value.trim();
-  const link = $('mLink').value.trim();
-  const tagsRaw = $('mTags').value.trim();
-  const selectedDivision = $('mChallengeDiv').value;
-  let entryType = $('mType').value;
-  const imagePreview = $('mImagePreview');
-
-  if (!author || !title || !link) {
-    toast('Please fill all required fields', 'error'); return;
-  }
-
-  // Gospel, Praise & Worship, and Live Artists never have challenges
-  if (['gospel', 'praiseandworship', 'liveartists'].includes(selectedDivision)) {
-    entryType = 'top20';
-  }
-
-  // Parse typed tags and attach the selected division tag automatically
-  let tags = tagsRaw ? tagsRaw.split(/[\s,]+/).map(t => t.replace('#','').toLowerCase()).filter(Boolean) : [];
-  if (selectedDivision && !tags.includes(selectedDivision)) {
-    tags.push(selectedDivision);
-  }
-
-  const payload = { 
-    author, 
-    title, 
-    link, 
-    tags, 
-    linkType: detectLinkType(link),
-    entryType, 
-    weekId: currentWeekId
-  };
-
-  // Only assign challenge division if it is actually a challenge (English/Afrikaans)
-  if (entryType === 'challenge') {
-    payload.challengeDivision = selectedDivision;
-  }
-
-  if (imagePreview.dataset.base64) payload.image = imagePreview.dataset.base64;
-
-  await apiPost('/api/submissions', payload);
-  await loadData();
-  renderAdminSubmissions();
-  toast('Submission added!');
-
-  $('mAuthor').value = ''; $('mTitle').value = ''; $('mLink').value = '';
-  $('mTags').value = ''; imagePreview.style.display = 'none'; imagePreview.dataset.base64 = '';
-}
-async function uploadChallengeImage() {
-  const division = $('challengeImgDiv').value;
-  const preview = $('challengeImgPreview');
-  if (!preview.dataset.base64) { toast('Select an image first', 'error'); return; }
-
-  await apiPost('/api/challenge-image', {
-    weekId: currentWeekId,
-    division,
-    image: preview.dataset.base64
-  });
-
-  if (!challengeImages[currentWeekId]) challengeImages[currentWeekId] = {};
-  challengeImages[currentWeekId][division] = preview.dataset.base64;
-  toast('Challenge image uploaded!');
-}
-
-// ===================== LOGO =====================
-async function loadLogo() {
-  try {
-    const res = await apiGet('/api/logo');
-    if (res.url) applyLogo(res.url);
-  } catch (e) {}
-}
-
-function applyLogo(url) {
-  const box = document.getElementById('logoBox');
-  if (!box) return;
-  if (url) {
-    box.innerHTML = '<img src="' + url + '" alt="Astra Musica" style="width:44px;height:44px;object-fit:contain;border-radius:10px;">';
-    box.style.background = 'transparent';
-    box.style.border = 'none';
-    box.style.boxShadow = 'none';
-  } else {
-    box.innerHTML = 'AM';
-    box.style.background = 'linear-gradient(135deg, var(--brand-blue), #2a4fc7)';
-    box.style.border = '2px solid rgba(212,175,55,0.3)';
-    box.style.boxShadow = '0 0 20px rgba(65,105,225,0.3)';
+    reader.readAsDataURL(input.files[0]);
   }
 }
-
-async function updateLogo() {
-  const url = document.getElementById('logoUrl').value.trim();
-  if (!url) return;
-  await apiPost('/api/logo', { url });
-  applyLogo(url);
-  toast('Logo saved! It will appear for everyone.');
-}
-
-async function uploadLogoFile() {
-  const fileInput = document.getElementById('logoFileInput');
-  const file = fileInput.files[0];
-  if (!file) { toast('Select a logo image first', 'error'); return; }
-
-  const reader = new FileReader();
-  reader.onload = async function(e) {
-    const base64 = e.target.result;
-    await apiPost('/api/logo', { url: base64 });
-    applyLogo(base64);
-    toast('Logo saved! (For smaller file size, use a URL instead of upload)');
-  };
-  reader.readAsDataURL(file);
-}
-
-// ===================== TEAM MEMBERS =====================
-function renderTeamMembers() {
-  const section = $('teamSection');
-  const grid = $('teamGrid');
-  if (!section || !grid) return;
-
-  if (teamMembers.length === 0) {
-    section.style.display = 'none';
-    return;
-  }
-
-  section.style.display = 'block';
-  grid.innerHTML = teamMembers.map(m => `
-    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;text-align:center;backdrop-filter:blur(10px);">
-      ${m.photo
-        ? `<img src="${m.photo}" style="width:80px;height:80px;object-fit:cover;border-radius:50%;border:2px solid var(--brand-gold);margin-bottom:10px;">`
-        : `<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--brand-blue),#2a4fc7);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:28px;font-weight:700;color:white;">${m.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>`
-      }
-      <div style="font-weight:700;font-size:15px;color:white;margin-bottom:4px;">${m.name}</div>
-      <div style="font-size:12px;color:var(--brand-gold);font-weight:600;margin-bottom:6px;">${m.role}</div>
-      ${m.bio ? `<div style="font-size:12px;color:rgba(255,255,255,0.6);line-height:1.4;">${m.bio}</div>` : ''}
-    </div>
-  `).join('');
-}
-
-async function addTeamMember() {
-  const name = $('tmName').value.trim();
-  const role = $('tmRole').value.trim();
-  const bio = $('tmBio').value.trim();
-  const preview = $('tmPhotoPreview');
-  const photo = preview.dataset.base64 || '';
-
-  if (!name || !role) { toast('Name and role are required', 'error'); return; }
-
-  const res = await apiPost('/api/team-members', { name, role, bio, photo });
-  if (res.error) { toast(res.error, 'error'); return; }
-
-  teamMembers.push(res.member);
-  renderTeamMembers();
-  renderAdminTeamMembers();
-
-  $('tmName').value = '';
-  $('tmRole').value = '';
-  $('tmBio').value = '';
-  $('tmPhoto').value = '';
-  preview.style.display = 'none';
-  preview.dataset.base64 = '';
-
-  toast('Team member added!');
-}
-
-function renderAdminTeamMembers() {
-  const container = $('teamMembersList');
-  if (!container) return;
-
-  if (teamMembers.length === 0) {
-    container.innerHTML = '<p style="font-size:13px;color:rgba(255,255,255,0.4);">No team members added yet.</p>';
-    return;
-  }
-
-  container.innerHTML = teamMembers.map(m => `
-    <div style="display:flex;align-items:center;gap:12px;padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;margin-bottom:8px;">
-      ${m.photo
-        ? `<img src="${m.photo}" style="width:40px;height:40px;object-fit:cover;border-radius:50%;">`
-        : `<div style="width:40px;height:40px;border-radius:50%;background:var(--brand-blue);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:white;">${m.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>`
-      }
-      <div style="flex:1;">
-        <div style="font-weight:600;font-size:14px;">${m.name}</div>
-        <div style="font-size:12px;color:var(--brand-gold);">${m.role}</div>
-      </div>
-      <button onclick="deleteTeamMember('${m.id}')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;" title="Remove">🗑️</button>
-    </div>
-  `).join('');
-}
-
-async function deleteTeamMember(id) {
-  if (!confirm('Remove this team member?')) return;
-  await apiDelete('/api/team-members/' + id);
-  teamMembers = teamMembers.filter(m => m.id !== id);
-  renderTeamMembers();
-  renderAdminTeamMembers();
-  toast('Team member removed');
-}
-
-// ===================== JUDGE PHOTOS =====================
-async function addJudge() {
-  const name = $('newJudgeName').value.trim();
-  const email = $('newJudgeEmail').value.trim();
-  const division = $('newJudgeDivision').value;
-  const password = $('newJudgePassword').value;
-  const preview = $('newJudgePhotoPreview');
-  const photo = preview.dataset.base64 || '';
-
-  if (!name || !email || !division || !password) {
-    toast('Name, email, division, and password are required', 'error'); return;
-  }
-
-  const res = await apiPost('/api/judges', { name, email, division, password, photo });
-  if (res.error) { toast(res.error, 'error'); return; }
-
-  toast(`Judge ${name} added!`);
-  $('newJudgeName').value = '';
-  $('newJudgeEmail').value = '';
-  $('newJudgePassword').value = '';
-  $('newJudgePhoto').value = '';
-  preview.style.display = 'none';
-  preview.dataset.base64 = '';
-
-  await loadData();
-  renderAdminJudges();
-}
-
-// Override renderAdminJudges to show photos
-let editingJudge = null;
-
-async function renderAdminJudges() {
-  const judgesData = await apiGet('/api/judges');
-  const tbody = $('judgesTable');
-
-  tbody.innerHTML = Object.entries(judgesData).map(([id, j]) => {
-    const scoreCount = Object.values(scores).filter(s => s[j.name]).length;
-    const totalSubs = getSubsForDivision(j.division).length;
-
-    if (editingJudge === id) {
-      return `
-        <tr>
-          <td colspan="7" style="padding:12px;background:rgba(0,0,0,0.3);border:1px solid var(--brand-gold);">
-            <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-              <input type="text" id="edit-judge-name-${id}" value="${j.name}" placeholder="Name" style="flex:1;min-width:100px;padding:6px 10px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:white;font-size:13px;">
-              <input type="email" id="edit-judge-email-${id}" value="${j.email}" placeholder="Email" style="flex:1;min-width:120px;padding:6px 10px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:white;font-size:13px;">
-              <select id="edit-judge-division-${id}" style="padding:6px 10px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:white;font-size:13px;">
-                <option value="english" ${j.division==='english'?'selected':''}>English</option>
-                <option value="afrikaans" ${j.division==='afrikaans'?'selected':''}>Afrikaans</option>
-                <option value="gospel" ${j.division==='gospel'?'selected':''}>Gospel</option>
-                <option value="praiseandworship" ${j.division==='praiseandworship'?'selected':''}>Praise & Worship</option>
-                <option value="liveartists" ${j.division==='liveartists'?'selected':''}>Live Artists</option>
-              </select>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <input type="file" id="edit-judge-photo-${id}" accept="image/*" style="color:white;font-size:12px;">
-              <button onclick="saveJudgeEdit('${id}')" style="padding:5px 12px;background:var(--brand-gold);border:none;border-radius:6px;color:#1a1a2e;cursor:pointer;font-size:12px;font-weight:700;">💾 Save</button>
-              <button onclick="cancelJudgeEdit()" style="padding:5px 12px;background:rgba(255,255,255,0.1);border:none;border-radius:6px;color:white;cursor:pointer;font-size:12px;">Cancel</button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }
-
-    return `
-      <tr>
-        <td style="display:flex;align-items:center;gap:8px;">
-          ${j.photo
-            ? `<img src="${j.photo}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;border:1px solid ${divisions[j.division].color};">`
-            : `<div style="width:32px;height:32px;border-radius:50%;background:${divisions[j.division].color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;">${j.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>`
-          }
-          <span style="font-weight:600;">${j.name}</span>
-        </td>
-        <td>${j.email}</td>
-        <td><span class="tag ${j.division}" style="font-size:11px;">${divisions[j.division].name}</span></td>
-        <td><span class="status-dot active"></span>Active</td>
-        <td>${j.hasSetPassword ? '✓ Changed' : 'Admin Set'}</td>
-        <td>${scoreCount} / ${totalSubs}</td>
-        <td>
-          <button onclick="startEditJudge('${id}')" style="background:none;border:none;color:var(--brand-gold);cursor:pointer;font-size:14px;" title="Edit">✏️</button>
-          <button onclick="deleteJudge('${id}')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;" title="Remove judge">🗑️</button>
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
-
-function startEditJudge(id) {
-  editingJudge = id;
-  renderAdminJudges();
-}
-
-function cancelJudgeEdit() {
-  editingJudge = null;
-  renderAdminJudges();
-}
-
-async function saveJudgeEdit(id) {
-  const updates = {
-    name: $(`edit-judge-name-${id}`).value.trim(),
-    email: $(`edit-judge-email-${id}`).value.trim(),
-    division: $(`edit-judge-division-${id}`).value
-  };
-
-  const fileInput = $(`edit-judge-photo-${id}`);
-  if (fileInput && fileInput.files && fileInput.files[0]) {
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-      updates.photo = e.target.result;
-      await finishJudgeEdit(id, updates);
-    };
-    reader.readAsDataURL(fileInput.files[0]);
-  } else {
-    await finishJudgeEdit(id, updates);
-  }
-}
-
-async function finishJudgeEdit(id, updates) {
-  try {
-    const res = await fetch(API + '/api/judges/' + id, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates)
-    });
-    const data = await res.json();
-    if (data.success) {
-      await loadData();
-      editingJudge = null;
-      renderAdminJudges();
-      toast('Judge updated!');
-    } else {
-      toast(data.error || 'Update failed', 'error');
-    }
-  } catch (e) {
-    toast('Failed to update judge', 'error');
-  }
-}
-
-// Override renderJudgePanel to show judge photo
-function setJudgeTab(tab) {
-  judgeTab = tab;
-  document.querySelectorAll('#screenJudge .tab').forEach(t => t.classList.remove('active'));
-  $('tabJudge' + (tab === 'top20' ? 'Top20' : 'Challenge')).classList.add('active');
-  renderJudgePanel();
-}
-
-function renderJudgePanel() {
-  const container = $('judgeSubmissions');
-  const divColor = divisions[currentJudge.division].color;
-
-  // Judge photo header
-  let headerHtml = '';
-  const judgeObj = Object.values(judges).find(j => j.email === currentJudge.email);
-  if (judgeObj && judgeObj.photo) {
-    headerHtml = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding:16px;background:rgba(255,255,255,0.05);border-radius:12px;border-left:4px solid ${divColor};">
-      <img src="${judgeObj.photo}" style="width:56px;height:56px;object-fit:cover;border-radius:50%;border:2px solid ${divColor};">
-      <div>
-        <div style="font-weight:700;font-size:16px;color:white;">${currentJudge.name}</div>
-        <div style="font-size:13px;color:${divColor};">${divisions[currentJudge.division].name} Judge</div>
-      </div>
-    </div>`;
-  }
-
-  // Get submissions based on active tab
-  let divSubs = [];
-  let emptyMessage = '';
-  if (judgeTab === 'top20') {
-    divSubs = getSubsForDivision(currentJudge.division);
-    emptyMessage = 'No Top 20 submissions yet for this division.';
-  } else {
-    divSubs = submissions.filter(s =>
-      s.weekId === currentWeekId &&
-      s.entryType === 'challenge' &&
-      s.challengeDivision === currentJudge.division
-    );
-    emptyMessage = 'No challenge submissions yet for this division.';
-  }
-
-  if (divSubs.length === 0) {
-    container.innerHTML = headerHtml + `<p class="text-center text-tertiary" style="padding:40px;font-size:16px;">${emptyMessage}</p>`;
-    return;
-  }
-
-  container.innerHTML = headerHtml + divSubs.map(sub => {
-    const myScore = scores[sub.id]?.[currentJudge.name];
-    const isScored = !!myScore;
-    const c = myScore ? myScore.criteria : [0,0,0,0];
-    const total = isScored ? myScore.total : Math.round(((c[0]+c[1]+c[2]+c[3])/40)*100);
-
-    return `
-      <div class="card" style="border-left: 4px solid ${divColor};" id="song-card-${sub.id}">
-        <div class="card-header">
-          <div>
-            <div class="card-title" style="font-size:18px;">${sub.title}</div>
-            <div class="card-meta" style="font-size:14px;">by ${sub.author} · ${formatDate(sub.timestamp)}</div>
-          </div>
-          ${isScored ? `<span style="font-size:13px;color:#6bff6b;font-weight:700;background:rgba(107,255,107,0.1);padding:4px 12px;border-radius:20px;">✓ Scored ${myScore.total}%</span>` : '<span style="font-size:13px;color:var(--brand-gold);font-weight:700;background:rgba(212,175,55,0.1);padding:4px 12px;border-radius:20px;">Not Scored</span>'}
-        </div>
-        <div class="tags">
-          ${sub.tags.map(t => `<span class="tag ${t}">#${t}</span>`).join('')}
-          ${sub.entryType === 'challenge' ? '<span class="challenge-badge">Challenge</span>' : ''}
-        </div>
-        ${sub.image ? `<img src="${sub.image}" class="submission-img" style="margin-top:10px;max-width:200px;">` : ''}
-        <a href="${sub.link}" target="_blank" class="link-btn" style="font-size:14px;padding:10px 18px;margin-top:12px;">▶️ Play Song</a>
-
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">
-          <p style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.8);margin-bottom:14px;">Score this song (0-10 each):</p>
-          <div class="criteria-grid">
-            <div class="criterion">
-              <label style="font-size:13px;">Vocals</label>
-              <div class="score-control">
-                <button class="score-btn" onclick="adjustScore(${sub.id}, 'vocals', -1)">−</button>
-                <span class="score-value" id="val-vocals-${sub.id}">${c[0]}</span>
-                <button class="score-btn" onclick="adjustScore(${sub.id}, 'vocals', 1)">+</button>
-              </div>
-            </div>
-            <div class="criterion">
-              <label style="font-size:13px;">Production</label>
-              <div class="score-control">
-                <button class="score-btn" onclick="adjustScore(${sub.id}, 'production', -1)">−</button>
-                <span class="score-value" id="val-production-${sub.id}">${c[1]}</span>
-                <button class="score-btn" onclick="adjustScore(${sub.id}, 'production', 1)">+</button>
-              </div>
-            </div>
-            <div class="criterion">
-              <label style="font-size:13px;">Originality</label>
-              <div class="score-control">
-                <button class="score-btn" onclick="adjustScore(${sub.id}, 'originality', -1)">−</button>
-                <span class="score-value" id="val-originality-${sub.id}">${c[2]}</span>
-                <button class="score-btn" onclick="adjustScore(${sub.id}, 'originality', 1)">+</button>
-              </div>
-            </div>
-            <div class="criterion">
-              <label style="font-size:13px;">Impact</label>
-              <div class="score-control">
-                <button class="score-btn" onclick="adjustScore(${sub.id}, 'impact', -1)">−</button>
-                <span class="score-value" id="val-impact-${sub.id}">${c[3]}</span>
-                <button class="score-btn" onclick="adjustScore(${sub.id}, 'impact', 1)">+</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="score-display" style="margin-top:16px;">
-            <span class="label" style="font-size:15px;">Current Total</span>
-            <span class="value" id="display-total-${sub.id}" style="font-size:36px;">${total}%</span>
-          </div>
-
-          ${isScored
-            ? `<button class="score-edit-btn" onclick="enableEdit(${sub.id})">✏️ Edit My Score</button>`
-            : `<button class="save-score-btn" id="save-btn-${sub.id}" onclick="saveScore(${sub.id})">💾 Save My Score</button>`
-          }
-
-          <p style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:10px;">
-            ${isScored ? '✓ Your score is saved. Other judges cannot see it.' : 'Adjust all 4 criteria, then click Save.'}
-          </p>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-
-// ===================== INIT =====================
-async function init() {
-  await loadData();
-  await loadLogo();
-  setBodyClass('main-page');
-  showScreen('screenRole');
-  renderTeamMembers();
-  updateCountdown();
-  handleImageUpload('mImage', 'mImagePreview');
-  handleImageUpload('challengeImg', 'challengeImgPreview');
-  handleImageUpload('tmPhoto', 'tmPhotoPreview');
-  handleImageUpload('newJudgePhoto', 'newJudgePhotoPreview');
-}
-init();

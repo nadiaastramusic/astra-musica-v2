@@ -171,9 +171,9 @@
           <div class="form-group full"><label>Song Link (Suno, YouTube, Facebook, any)</label><input type="url" id="mLink" placeholder="https://..."></div>
           <div class="form-group full"><label>Hashtags (space separated)</label><input type="text" id="mTags" placeholder="#english #gospel"></div>
           <div class="form-group full"><label>Cover Image (optional)</label><input type="file" id="mImage" accept="image/*"><img id="mImagePreview" class="img-upload-preview hidden" style="display:none;"></div>
-          <div class="form-group">
+         <div class="form-group">
             <label>Entry Type</label>
-            <select id="mType">
+            <select id="mType" onchange="updateDivisionOptions()">
               <option value="top20">Top 20</option>
               <option value="challenge">Challenge</option>
             </select>
@@ -187,9 +187,6 @@
               <option value="praiseandworship">Praise & Worship</option>
               <option value="liveartists">Live Artists</option>
             </select>
-          </div>
-          <div class="form-group full">
-            <button class="btn btn-gold" onclick="addManualSubmission()">Add to Competition</button>
           </div>
         </div>
       </div>
@@ -234,13 +231,12 @@
           <div class="form-group"><label>Email</label><input type="email" id="newJudgeEmail" placeholder="judge@email.com"></div>
           <div class="form-group"><label>Password</label><input type="text" id="newJudgePassword" placeholder="Set their password"></div>
           <div class="form-group"><label>Photo</label><input type="file" id="newJudgePhoto" accept="image/*"><img id="newJudgePhotoPreview" style="display:none;width:50px;height:50px;object-fit:cover;border-radius:8px;margin-top:6px;"></div>
-          <div class="form-group">
-            <label>Division</label>
-            <select id="newJudgeDivision">
+        <div class="form-group">
+            <label>Judge Division</label>
+            <select id="newJudgeDiv">
               <option value="english">English</option>
               <option value="afrikaans">Afrikaans</option>
-              <option value="gospel">Gospel</option>
-              <option value="praiseandworship">Praise & Worship</option>
+              <option value="gospelpraise">Gospel & Praise & Worship</option>
               <option value="liveartists">Live Artists</option>
             </select>
           </div>
