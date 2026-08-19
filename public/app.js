@@ -264,6 +264,21 @@ async function deleteTeamMember(index) {
   renderTeamMembers();
 }
 
+// ===================== INITIAL APP LOAD =====================
+async function initApp() {
+  try {
+    const data = await apiGet('/api/all-data');
+    if (data && Array.isArray(data.teamMembers)) {
+      teamMembers = data.teamMembers;
+    }
+    renderTeamMembers();
+  } catch (err) {
+    console.error('Failed to load initial app data:', err);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', initApp);
+
 // ===================== JUDGE =====================
 async function loginJudge() {
   const email = $('judgeEmail').value.trim();
@@ -1029,20 +1044,18 @@ function setupImagePreviews() {
 window.addEventListener('DOMContentLoaded', async () => {
   setupImagePreviews();
 
-  // Attach dynamic listener for manual submission button if added in future or form submit
-  const submitBtn = document.querySelector('#adminSubmissions .manual-form button');
-  if (!submitBtn) {
-    const parentForm = document.querySelector('#adminSubmissions .manual-form');
-    if (parentForm) {
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-gold full';
-      btn.style.marginTop = '12px';
-      btn.textContent = '➕ Save Submission';
-      btn.onclick = addManualSubmission;
-      parentForm.appendChild(btn);
-    }
+  // Attach dynamic save button to manual submission form if missing
+  const parentForm = document.querySelector('#adminSubmissions .manual-form');
+  if (parentForm && !parentForm.querySelector('button.btn-gold')) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-gold full';
+    btn.style.marginTop = '12px';
+    btn.textContent = '➕ Save Submission';
+    btn.onclick = addManualSubmission;
+    parentForm.appendChild(btn);
   }
 
+  // Load backend data and display role screen
   await loadData();
   showScreen('screenRole');
 });
