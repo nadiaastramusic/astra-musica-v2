@@ -124,6 +124,7 @@ async function loadData() {
   divisionLogos = allData.divisionLogos || {};
   teamMembers = allData.teamMembers || [];
   judges = await apiGet('/api/judges');
+  renderTeamMembers();
 }
 
 // ===================== NAVIGATION =====================
@@ -167,9 +168,12 @@ function renderTeamMembers() {
   const el = $('teamMembersList');
   if (!el) return;
   el.innerHTML = teamMembers.map(m => `
-    <div class="team-card">
-      <img src="${m.photo || ''}" alt="${m.name}">
-      <div><b>${m.name}</b> - ${m.role}</div>
+    <div class="team-card" style="display:flex; align-items:center; gap:14px; padding:12px; background:rgba(255,255,255,0.05); border-radius:10px; margin-bottom:10px;">
+      <img src="${m.photo || ''}" alt="${m.name}" style="width:54px; height:54px; object-fit:cover; border-radius:50%; flex-shrink:0;">
+      <div>
+        <div style="font-size:15px; font-weight:700;">${m.name} <span style="font-size:13px; font-weight:400; color:rgba(255,255,255,0.6);">· ${m.role}</span></div>
+        ${m.bio ? `<div style="font-size:13px; color:rgba(255,255,255,0.8); margin-top:4px; line-height:1.4;">${m.bio}</div>` : ''}
+      </div>
     </div>
   `).join('');
 }
@@ -776,13 +780,13 @@ function renderDivisionLogoSettings() {
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
           <div>
             <b style="color:${divColor};">${divisions[div].name}</b>
-            <div style="font-size: 12px; color: rgba(255,255,255,0.5);">Current logo URL or image link</div>
+            <div style="font-size: 12px; color: rgba(255,255,255,0.5);">Current logo URL</div>
           </div>
-          ${currentLogo ? `<img src="${currentLogo}" style="width:40px;height:40px;object-fit:contain;border-radius:4px;">` : ''}
+          ${currentLogo ? `<img src="${currentLogo}" style="max-width:48px; max-height:48px; width:auto; height:auto; object-fit:contain; border-radius:6px; background:rgba(255,255,255,0.05); padding:2px;">` : ''}
         </div>
         <div style="display: flex; gap: 8px; margin-top: 10px;">
           <input type="text" id="logo-input-${div}" value="${currentLogo}" placeholder="Image URL..." style="flex: 1;">
-          <button class="btn btn-primary" style="width:auto;padding:6px 14px;font-size:12px;" onclick="saveDivisionLogo('${div}')">Save</button>
+          <button class="btn btn-primary" style="width:auto; padding:6px 14px; font-size:12px;" onclick="saveDivisionLogo('${div}')">Save</button>
         </div>
       </div>
     `;
@@ -801,5 +805,6 @@ async function saveDivisionLogo(div) {
 // ===================== INITIALIZATION =====================
 window.addEventListener('DOMContentLoaded', async () => {
   await loadData();
-  selectRole('public');
+  showScreen('screenRole');
+  renderTeamMembers();
 });
