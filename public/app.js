@@ -772,38 +772,34 @@ function renderDivisionLogoSettings() {
     const divColor = divisions[div].color;
     const currentLogo = divisionLogos[div] || '';
     html += `
-      <div style="margin-bottom:16px;padding:12px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-          <div style="width:12px;height:12px;border-radius:50%;background:${divColor};"></div>
-          <span style="font-weight:600;font-size:14px;">${divisions[div].name}</span>
+      <div class="card" style="border-left: 4px solid ${divColor}; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div>
+            <b style="color:${divColor};">${divisions[div].name}</b>
+            <div style="font-size: 12px; color: rgba(255,255,255,0.5);">Current logo URL or image link</div>
+          </div>
+          ${currentLogo ? `<img src="${currentLogo}" style="width:40px;height:40px;object-fit:contain;border-radius:4px;">` : ''}
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input type="url" id="divLogoUrl-${div}" placeholder="Logo URL" value="${currentLogo}" style="flex:1;padding:8px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:white;font-size:13px;">
-          <input type="file" id="divLogoFile-${div}" accept="image/*" style="display:none;" onchange="handleDivLogoUpload('${div}', this)">
-          <button onclick="document.getElementById('divLogoFile-${div}').click()" style="padding:8px 12px;background:rgba(255,255,255,0.1);border:none;border-radius:6px;color:white;cursor:pointer;font-size:12px;">📁</button>
-          <button onclick="updateDivisionLogo('${div}')" style="padding:8px 16px;background:var(--brand-gold);border:none;border-radius:6px;color:#1a1a2e;cursor:pointer;font-size:12px;font-weight:700;">Save</button>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <input type="text" id="logo-input-${div}" value="${currentLogo}" placeholder="Image URL..." style="flex: 1;">
+          <button class="btn btn-primary" style="width:auto;padding:6px 14px;font-size:12px;" onclick="saveDivisionLogo('${div}')">Save</button>
         </div>
-        ${currentLogo ? `<img src="${currentLogo}" style="width:60px;height:60px;object-fit:contain;border-radius:6px;margin-top:8px;">` : ''}
       </div>
     `;
   });
   container.innerHTML = html;
 }
 
-async function updateDivisionLogo(div) {
-  const url = $(`divLogoUrl-${div}`).value.trim();
-  await apiPost('/api/admin/division-logo', { division: div, logoUrl: url });
+async function saveDivisionLogo(div) {
+  const url = $(`logo-input-${div}`).value.trim();
   divisionLogos[div] = url;
-  toast('Division logo updated!');
+  await apiPost('/api/admin/division-logos', { division: div, logoUrl: url });
+  toast(`Logo updated for ${divisions[div].name}!`);
   renderDivisionLogoSettings();
 }
 
-function handleDivLogoUpload(div, input) {
-  if (input.files && input.files[0]) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      $(`divLogoUrl-${div}`).value = e.target.result;
-    };
-    reader.readAsDataURL(input.files[0]);
-  }
-}
+// ===================== INITIALIZATION =====================
+window.addEventListener('DOMContentLoaded', async () => {
+  await loadData();
+  selectRole('public');
+});
