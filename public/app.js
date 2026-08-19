@@ -841,21 +841,40 @@ async function addManualSubmission() {
   const title = $('mTitle').value.trim();
   const link = $('mLink').value.trim();
   const tagsRaw = $('mTags').value.trim();
-  const entryType = $('mType').value;
-  const challengeDivision = $('mChallengeDiv').value;
+  const selectedDivision = $('mChallengeDiv').value;
+  let entryType = $('mType').value;
   const imagePreview = $('mImagePreview');
 
-  if (!author || !title || !link || !tagsRaw) {
+  if (!author || !title || !link) {
     toast('Please fill all required fields', 'error'); return;
   }
 
-  const tags = tagsRaw.split(/[\s,]+/).map(t => t.replace('#','').toLowerCase()).filter(Boolean);
+  // Gospel, Praise & Worship, and Live Artists never have challenges
+  if (['gospel', 'praiseandworship', 'liveartists'].includes(selectedDivision)) {
+    entryType = 'top20';
+  }
+
+  // Parse typed tags and attach the selected division tag automatically
+  let tags = tagsRaw ? tagsRaw.split(/[\s,]+/).map(t => t.replace('#','').toLowerCase()).filter(Boolean) : [];
+  if (selectedDivision && !tags.includes(selectedDivision)) {
+    tags.push(selectedDivision);
+  }
+
   const payload = { 
-    author, title, link, tags, 
+    author, 
+    title, 
+    link, 
+    tags, 
     linkType: detectLinkType(link),
-    entryType, weekId: currentWeekId
+    entryType, 
+    weekId: currentWeekId
   };
-  if (entryType === 'challenge') payload.challengeDivision = challengeDivision;
+
+  // Only assign challenge division if it is actually a challenge (English/Afrikaans)
+  if (entryType === 'challenge') {
+    payload.challengeDivision = selectedDivision;
+  }
+
   if (imagePreview.dataset.base64) payload.image = imagePreview.dataset.base64;
 
   await apiPost('/api/submissions', payload);
@@ -866,7 +885,6 @@ async function addManualSubmission() {
   $('mAuthor').value = ''; $('mTitle').value = ''; $('mLink').value = '';
   $('mTags').value = ''; imagePreview.style.display = 'none'; imagePreview.dataset.base64 = '';
 }
-
 async function uploadChallengeImage() {
   const division = $('challengeImgDiv').value;
   const preview = $('challengeImgPreview');
