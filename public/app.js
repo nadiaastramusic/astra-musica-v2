@@ -3,14 +3,13 @@ const API = '';
 const divisions = {
   english: { name: 'English', color: '#C41E3A' },
   afrikaans: { name: 'Afrikaans', color: '#228B22' },
-  gospelpraise: { name: 'Gospel & Praise & Worship', color: '#8B4513' },
+  gospelpraise: { name: 'Gospel & Praise & Worship', color: '#7B4FA0' },
   liveartists: { name: 'Live Artists', color: '#008080' }
 };
 
-// Sub-division colours for merged tabs (not full divisions)
 const subDivisionColors = {
-  gospel: '#8B4513',
-  praiseandworship: '#800080'
+  gospel: '#7B4FA0',
+  praiseandworship: '#7B4FA0'
 };
 
 // ===================== STATE =====================
@@ -35,6 +34,7 @@ let teamMembers = [];
 let emailEnabled = false;
 let editingScores = {};
 let mainLogoUrl = '';
+let currentBackdropUrl = '';
 
 // ===================== UTILS =====================
 function $(id) { return document.getElementById(id); }
@@ -88,7 +88,6 @@ function getChallengeSubs(weekId = currentWeekId) {
   });
 }
 
-// PUBLIC / ADMIN — shows everything inside the merged division
 function getSubsForDivision(div, weekId = currentWeekId) {
   let subs = submissions.filter(s => s.weekId === weekId);
   if (div === 'gospelpraise') {
@@ -97,7 +96,6 @@ function getSubsForDivision(div, weekId = currentWeekId) {
   return subs.filter(s => s.tags && s.tags.includes(div));
 }
 
-// JUDGE ONLY — respects the active Gospel / P&W sub-tab
 function getJudgeQueue(div, weekId = currentWeekId) {
   let subs = submissions.filter(s => s.weekId === weekId);
   if (div === 'gospelpraise') {
@@ -113,6 +111,31 @@ function formatDate(ts) {
 
 function setBodyClass(cls) {
   document.body.className = cls;
+}
+
+// ===================== BACKDROP SYSTEM =====================
+function setBackdrop(imageUrl, opacity) {
+  if (opacity === undefined) opacity = 0.08;
+  let bd = $('dynamicBackdrop');
+  if (!bd) {
+    bd = document.createElement('div');
+    bd.id = 'dynamicBackdrop';
+    bd.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background-size:cover;background-position:center;z-index:-1;pointer-events:none;transition:background-image 0.8s ease, opacity 0.8s ease;';
+    document.body.insertBefore(bd, document.body.firstChild);
+  }
+  if (!imageUrl) {
+    bd.style.opacity = '0';
+    return;
+  }
+  if (currentBackdropUrl !== imageUrl) {
+    bd.style.backgroundImage = 'url(' + imageUrl + ')';
+    currentBackdropUrl = imageUrl;
+  }
+  bd.style.opacity = String(opacity);
+}
+
+function clearBackdrop() {
+  setBackdrop(null, 0);
 }
 
 // ===================== API =====================
@@ -158,7 +181,7 @@ async function loadData() {
   if (allData.revealTime) revealTime = allData.revealTime;
   currentWeekId = allData.weekId || currentWeekId;
   challengeImages = allData.challengeImages || {};
-  divisionLogos = allData.divisionLogos || {};
+  if (allData.divisionLogos) divisionLogos = allData.divisionLogos;
   teamMembers = allData.teamMembers || [];
   emailEnabled = !!allData.emailEnabled;
   judges = await apiGet('/api/judges');
@@ -175,7 +198,7 @@ function renderMainLogo() {
   const logoBox = $('logoBox');
   if (!logoBox) return;
   if (mainLogoUrl) {
-    logoBox.innerHTML = `<img src="${mainLogoUrl}" alt="Astra Musica" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
+    logoBox.innerHTML = '<img src="' + mainLogoUrl + '" alt="Astra Musica" style="width:100%;height:100%;object-fit:cover;border-radius:8px;display:block;">';
   } else {
     logoBox.textContent = 'AM';
   }
@@ -186,6 +209,7 @@ function selectRole(role) {
   currentRole = role;
   if (role === 'admin') {
     setBodyClass('main-page');
+    setBackdrop(mainLogoUrl, 0.06);
     if (adminLoggedIn) {
       if ($('headerBadge')) $('headerBadge').innerHTML = '<span class="badge">Admin</span>';
       showScreen('screenAdmin');
@@ -197,6 +221,7 @@ function selectRole(role) {
     }
   } else if (role === 'judge') {
     setBodyClass('main-page');
+    setBackdrop(mainLogoUrl, 0.06);
     if ($('headerBadge')) $('headerBadge').innerHTML = '';
     showScreen('screenJudgeLogin');
     if ($('judgeEmail')) $('judgeEmail').value = '';
@@ -204,6 +229,7 @@ function selectRole(role) {
     setTimeout(() => { if ($('judgeEmail')) $('judgeEmail').focus(); }, 100);
   } else {
     setBodyClass('main-page');
+    setBackdrop(mainLogoUrl, 0.08);
     if ($('headerBadge')) $('headerBadge').innerHTML = '<span class="badge">Public</span>';
     showScreen('screenPublic');
     setPublicTab('top20');
@@ -217,6 +243,7 @@ function goBack() {
   if ($('headerBadge')) $('headerBadge').innerHTML = '';
   setBodyClass('main-page');
   showScreen('screenRole');
+  setBackdrop(mainLogoUrl, 0.08);
   renderMainLogo();
   renderTeamMembers();
 }
@@ -276,7 +303,7 @@ async function addTeamMember() {
   if (res.error) { toast(res.error, 'error'); return; }
 
   teamMembers = res.teamMembers || teamMembers;
-  toast(`Added ${name} to team!`);
+  toast('Added ' + name + ' to team!');
   $('tmName').value = ''; $('tmRole').value = ''; $('tmBio').value = '';
   if (photoInput) photoInput.value = '';
   if ($('tmPhotoPreview')) $('tmPhotoPreview').style.display = 'none';
@@ -285,7 +312,7 @@ async function addTeamMember() {
 
 async function deleteTeamMember(index) {
   if (!confirm('Remove this team member?')) return;
-  const res = await apiDelete(`/api/admin/team/${index}`);
+  const res = await apiDelete('/api/admin/team/' + index);
   teamMembers = res.teamMembers || [];
   toast('Team member removed');
   renderTeamMembers();
@@ -300,11 +327,14 @@ async function loginJudge() {
     if (res.error) throw new Error(res.error);
     currentJudge = res;
     const divColor = divisions[currentJudge.division]?.color || '#d4af37';
-    $('headerBadge').innerHTML = `<span class="badge" style="border-color:${divColor};color:${divColor};">Judge · ${divisions[currentJudge.division]?.name || 'Judge'}</span>`;
+    $('headerBadge').innerHTML = '<span class="badge" style="border-color:' + divColor + ';color:' + divColor + ';">Judge · ' + (divisions[currentJudge.division]?.name || 'Judge') + '</span>';
     $('judgeDivisionName').textContent = divisions[currentJudge.division]?.name || currentJudge.division;
     $('judgeDivisionName').style.color = divColor;
     setBodyClass('div-' + currentJudge.division);
     showScreen('screenJudge');
+    // Set backdrop to division logo
+    const divLogo = divisionLogos[currentJudge.division] || mainLogoUrl;
+    setBackdrop(divLogo, 0.08);
     renderJudgePanel();
   } catch (e) {
     if ($('loginError')) $('loginError').style.display = 'block';
@@ -323,12 +353,9 @@ function renderJudgeGospelPraiseTabs() {
   if (!container) return;
   if (currentJudge?.division === 'gospelpraise') {
     container.style.display = 'flex';
-    const gospelColor = subDivisionColors.gospel;
-    const pwColor = subDivisionColors.praiseandworship;
-    container.innerHTML = `
-      <button onclick="switchJudgeSubTab('gospel')" style="flex:1; padding:10px 16px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:${currentGospelSubTab === 'gospel' ? gospelColor : 'rgba(0,0,0,0.3)'}; color:${currentGospelSubTab === 'gospel' ? '#fff' : 'rgba(255,255,255,0.6)'}; font-weight:700; cursor:pointer; font-size:13px;">Gospel</button>
-      <button onclick="switchJudgeSubTab('praiseandworship')" style="flex:1; padding:10px 16px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:${currentGospelSubTab === 'praiseandworship' ? pwColor : 'rgba(0,0,0,0.3)'}; color:${currentGospelSubTab === 'praiseandworship' ? '#fff' : 'rgba(255,255,255,0.6)'}; font-weight:700; cursor:pointer; font-size:13px;">Praise & Worship</button>
-    `;
+    const purple = subDivisionColors.gospel;
+    container.innerHTML = '<button onclick="switchJudgeSubTab('gospel')" style="flex:1; padding:10px 16px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:' + (currentGospelSubTab === 'gospel' ? purple : 'rgba(0,0,0,0.3)') + '; color:' + (currentGospelSubTab === 'gospel' ? '#fff' : 'rgba(255,255,255,0.6)') + '; font-weight:700; cursor:pointer; font-size:13px;">Gospel</button>' +
+      '<button onclick="switchJudgeSubTab('praiseandworship')" style="flex:1; padding:10px 16px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:' + (currentGospelSubTab === 'praiseandworship' ? purple : 'rgba(0,0,0,0.3)') + '; color:' + (currentGospelSubTab === 'praiseandworship' ? '#fff' : 'rgba(255,255,255,0.6)') + '; font-weight:700; cursor:pointer; font-size:13px;">Praise & Worship</button>';
   } else {
     container.style.display = 'none';
     container.innerHTML = '';
@@ -353,7 +380,7 @@ function renderJudgePanel() {
   }
 
   if (divSubs.length === 0) {
-    container.innerHTML = `<p class="text-center text-tertiary" style="padding:40px;font-size:16px;">No ${judgeTab === 'challenge' ? 'challenge' : 'Top 20'} submissions available for your division right now.</p>`;
+    container.innerHTML = '<p class="text-center text-tertiary" style="padding:40px;font-size:16px;">No ' + (judgeTab === 'challenge' ? 'challenge' : 'Top 20') + ' submissions available for your division right now.</p>';
     return;
   }
 
@@ -366,77 +393,25 @@ function renderJudgePanel() {
     const divColor = divisions[activeDivKey]?.color || subDivisionColors[activeDivKey] || '#d4af37';
     const total = isScored ? myScore.total : Math.round(((c[0] + c[1] + c[2] + c[3]) / 40) * 100);
 
-    return `
-      <div class="card" style="border-left: 4px solid ${divColor};" id="song-card-${sub.id}">
-        <div class="card-header">
-          <div>
-            <div class="card-title" style="font-size:18px;">${sub.title}</div>
-            <div class="card-meta" style="font-size:14px;">by ${sub.author} · ${formatDate(sub.timestamp)}</div>
-          </div>
-          ${isScored ? `<span style="font-size:13px;color:#6bff6b;font-weight:700;background:rgba(107,255,107,0.1);padding:4px 12px;border-radius:20px;">✓ Scored ${myScore.total}%</span>` : '<span style="font-size:13px;color:var(--brand-gold);font-weight:700;background:rgba(212,175,55,0.1);padding:4px 12px;border-radius:20px;">Not Scored</span>'}
-        </div>
-        <div class="tags">
-          ${(sub.tags || []).map(t => `<span class="tag ${t}">#${t}</span>`).join('')}
-          ${sub.entryType === 'challenge' ? '<span class="challenge-badge">Challenge</span>' : ''}
-        </div>
-        ${sub.image ? `<img src="${sub.image}" class="submission-img" style="margin-top:10px;max-width:200px;border-radius:8px;">` : ''}
-        <a href="${sub.link}" target="_blank" class="link-btn" style="font-size:14px;padding:10px 18px;margin-top:12px;display:inline-block;background:var(--brand-gold);color:#1a1a2e;font-weight:700;border-radius:6px;text-decoration:none;">▶️ Play Song</a>
-
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">
-          <p style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.8);margin-bottom:14px;">Score this song (0-10 each):</p>
-          <div class="criteria-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:12px;">
-            <div class="criterion">
-              <label style="font-size:13px;display:block;margin-bottom:4px;">Vocals</label>
-              <div class="score-control" style="display:flex;align-items:center;gap:8px;">
-                <button class="score-btn" onclick="adjustScore('${sub.id}', 'vocals', -1)">−</button>
-                <span class="score-value" id="val-vocals-${sub.id}">${c[0]}</span>
-                <button class="score-btn" onclick="adjustScore('${sub.id}', 'vocals', 1)">+</button>
-              </div>
-            </div>
-            <div class="criterion">
-              <label style="font-size:13px;display:block;margin-bottom:4px;">Production</label>
-              <div class="score-control" style="display:flex;align-items:center;gap:8px;">
-                <button class="score-btn" onclick="adjustScore('${sub.id}', 'production', -1)">−</button>
-                <span class="score-value" id="val-production-${sub.id}">${c[1]}</span>
-                <button class="score-btn" onclick="adjustScore('${sub.id}', 'production', 1)">+</button>
-              </div>
-            </div>
-            <div class="criterion">
-              <label style="font-size:13px;display:block;margin-bottom:4px;">Originality</label>
-              <div class="score-control" style="display:flex;align-items:center;gap:8px;">
-                <button class="score-btn" onclick="adjustScore('${sub.id}', 'originality', -1)">−</button>
-                <span class="score-value" id="val-originality-${sub.id}">${c[2]}</span>
-                <button class="score-btn" onclick="adjustScore('${sub.id}', 'originality', 1)">+</button>
-              </div>
-            </div>
-            <div class="criterion">
-              <label style="font-size:13px;display:block;margin-bottom:4px;">Impact</label>
-              <div class="score-control" style="display:flex;align-items:center;gap:8px;">
-                <button class="score-btn" onclick="adjustScore('${sub.id}', 'impact', -1)">−</button>
-                <span class="score-value" id="val-impact-${sub.id}">${c[3]}</span>
-                <button class="score-btn" onclick="adjustScore('${sub.id}', 'impact', 1)">+</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="score-display" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;">
-            <span class="label" style="font-size:15px;">Current Total</span>
-            <span class="value" id="display-total-${sub.id}" style="font-size:32px;font-weight:800;color:var(--brand-gold);">${total}%</span>
-          </div>
-
-          <div id="btn-container-${sub.id}" style="margin-top:12px;">
-            ${isScored
-              ? `<button class="btn btn-secondary score-edit-btn" onclick="enableEdit('${sub.id}')">✏️ Edit My Score</button>`
-              : `<button class="btn btn-gold save-score-btn" id="save-btn-${sub.id}" onclick="saveScore('${sub.id}')">💾 Save My Score</button>`
-            }
-          </div>
-
-          <p style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:10px;">
-            ${isScored ? '✓ Your score is saved. Other judges cannot see it.' : 'Adjust all 4 criteria, then click Save.'}
-          </p>
-        </div>
-      </div>
-    `;
+    return '<div class="card" style="border-left: 4px solid ' + divColor + ';" id="song-card-' + sub.id + '">' +
+      '<div class="card-header"><div><div class="card-title" style="font-size:18px;">' + sub.title + '</div><div class="card-meta" style="font-size:14px;">by ' + sub.author + ' · ' + formatDate(sub.timestamp) + '</div></div>' +
+      (isScored ? '<span style="font-size:13px;color:#6bff6b;font-weight:700;background:rgba(107,255,107,0.1);padding:4px 12px;border-radius:20px;">✓ Scored ' + myScore.total + '%</span>' : '<span style="font-size:13px;color:var(--brand-gold);font-weight:700;background:rgba(212,175,55,0.1);padding:4px 12px;border-radius:20px;">Not Scored</span>') +
+      '</div>' +
+      '<div class="tags">' + (sub.tags || []).map(t => '<span class="tag ' + t + '">#' + t + '</span>').join('') + (sub.entryType === 'challenge' ? '<span class="challenge-badge">Challenge</span>' : '') + '</div>' +
+      (sub.image ? '<img src="' + sub.image + '" class="submission-img" style="margin-top:10px;max-width:200px;border-radius:8px;">' : '') +
+      '<a href="' + sub.link + '" target="_blank" class="link-btn" style="font-size:14px;padding:10px 18px;margin-top:12px;display:inline-block;background:var(--brand-gold);color:#1a1a2e;font-weight:700;border-radius:6px;text-decoration:none;">▶️ Play Song</a>' +
+      '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">' +
+      '<p style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.8);margin-bottom:14px;">Score this song (0-10 each):</p>' +
+      '<div class="criteria-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:12px;">' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Vocals</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore('' + sub.id + '', 'vocals', -1)">−</button><span class="score-value" id="val-vocals-' + sub.id + '">' + c[0] + '</span><button class="score-btn" onclick="adjustScore('' + sub.id + '', 'vocals', 1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Production</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore('' + sub.id + '', 'production', -1)">−</button><span class="score-value" id="val-production-' + sub.id + '">' + c[1] + '</span><button class="score-btn" onclick="adjustScore('' + sub.id + '', 'production', 1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Originality</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore('' + sub.id + '', 'originality', -1)">−</button><span class="score-value" id="val-originality-' + sub.id + '">' + c[2] + '</span><button class="score-btn" onclick="adjustScore('' + sub.id + '', 'originality', 1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Impact</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore('' + sub.id + '', 'impact', -1)">−</button><span class="score-value" id="val-impact-' + sub.id + '">' + c[3] + '</span><button class="score-btn" onclick="adjustScore('' + sub.id + '', 'impact', 1)">+</button></div></div>' +
+      '</div>' +
+      '<div class="score-display" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;"><span class="label" style="font-size:15px;">Current Total</span><span class="value" id="display-total-' + sub.id + '" style="font-size:32px;font-weight:800;color:var(--brand-gold);">' + total + '%</span></div>' +
+      '<div id="btn-container-' + sub.id + '" style="margin-top:12px;">' + (isScored ? '<button class="btn btn-secondary score-edit-btn" onclick="enableEdit('' + sub.id + '')">✏️ Edit My Score</button>' : '<button class="btn btn-gold save-score-btn" id="save-btn-' + sub.id + '" onclick="saveScore('' + sub.id + '')">💾 Save My Score</button>') + '</div>' +
+      '<p style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:10px;">' + (isScored ? '✓ Your score is saved. Other judges cannot see it.' : 'Adjust all 4 criteria, then click Save.') + '</p>' +
+      '</div></div>';
   }).join('');
 }
 
@@ -451,12 +426,12 @@ function adjustScore(subId, criterion, delta) {
 
   editingScores[subId][idx] = Math.max(0, Math.min(10, editingScores[subId][idx] + delta));
 
-  const valEl = $(`val-${criterion}-${subId}`);
+  const valEl = $('val-' + criterion + '-' + subId);
   if (valEl) valEl.textContent = editingScores[subId][idx];
 
   const sum = editingScores[subId].reduce((a, b) => a + b, 0);
   const pct = Math.round((sum / 40) * 100);
-  const totalEl = $(`display-total-${subId}`);
+  const totalEl = $('display-total-' + subId);
   if (totalEl) totalEl.textContent = pct + '%';
 }
 
@@ -465,9 +440,9 @@ function enableEdit(subId) {
   if (!myScore) return;
   editingScores[subId] = [...myScore.criteria];
 
-  const container = $(`btn-container-${subId}`);
+  const container = $('btn-container-' + subId);
   if (container) {
-    container.innerHTML = `<button class="btn btn-gold save-score-btn" id="save-btn-${subId}" onclick="saveScore('${subId}')">💾 Update My Score</button>`;
+    container.innerHTML = '<button class="btn btn-gold save-score-btn" id="save-btn-' + subId + '" onclick="saveScore('' + subId + '')">💾 Update My Score</button>';
   }
   toast('You can now edit your score. Click Update when done.');
 }
@@ -505,8 +480,11 @@ function setPublicTab(tab) {
 
   if (publicDivFilter === 'all') {
     setBodyClass('main-page');
+    setBackdrop(mainLogoUrl, 0.06);
   } else {
     setBodyClass('div-' + publicDivFilter);
+    const divLogo = divisionLogos[publicDivFilter] || mainLogoUrl;
+    setBackdrop(divLogo, 0.08);
   }
 
   if (tab === 'top20') renderTop20();
@@ -522,8 +500,11 @@ function setPublicDiv(div) {
 
   if (div === 'all') {
     setBodyClass('main-page');
+    setBackdrop(mainLogoUrl, 0.06);
   } else {
     setBodyClass('div-' + div);
+    const divLogo = divisionLogos[div] || mainLogoUrl;
+    setBackdrop(divLogo, 0.08);
   }
 
   if (publicTab === 'top20') renderTop20();
@@ -560,56 +541,45 @@ function renderTop20() {
     const divLogo = divisionLogos[div];
     const divJudges = Object.values(judges).filter(j => j.division === div);
 
-    html += `<div class="div-header" style="border-left: 4px solid ${divColor}; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px; margin-top:16px; display:flex; align-items:center;">`;
+    html += '<div class="div-header" style="border-left: 4px solid ' + divColor + '; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px; margin-top:16px; display:flex; align-items:center;">';
     if (divLogo) {
-      html += `<img src="${divLogo}" alt="${divisions[div].name}" style="width:40px;height:40px;object-fit:contain;border-radius:6px;margin-right:12px;">`;
+      html += '<img src="' + divLogo + '" alt="' + divisions[div].name + '" style="width:40px;height:40px;object-fit:contain;border-radius:6px;margin-right:12px;">';
     }
-    html += `<div style="flex:1;"><h2 style="color:${divColor};margin:0;font-size:18px;">${divisions[div].name}</h2></div>`;
+    html += '<div style="flex:1;"><h2 style="color:' + divColor + ';margin:0;font-size:18px;">' + divisions[div].name + '</h2></div>';
 
     if (divJudges.length > 0) {
-      html += `<div style="display:flex;gap:6px;align-items:center;">`;
+      html += '<div style="display:flex;gap:6px;align-items:center;">';
       divJudges.forEach(j => {
         if (j.photo) {
-          html += `<img src="${j.photo}" title="Judge: ${j.name}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;border:2px solid ${divColor};">`;
+          html += '<img src="' + j.photo + '" title="Judge: ' + j.name + '" style="width:32px;height:32px;object-fit:cover;border-radius:50%;border:2px solid ' + divColor + ';">';
         } else {
-          html += `<div title="Judge: ${j.name}" style="width:32px;height:32px;border-radius:50%;background:${divColor};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;">${j.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>`;
+          html += '<div title="Judge: ' + j.name + '" style="width:32px;height:32px;border-radius:50%;background:' + divColor + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;">' + j.name.split(' ').map(n=>n[0]).join('').slice(0,2) + '</div>';
         }
       });
-      html += `</div>`;
+      html += '</div>';
     }
-    html += `</div>`;
+    html += '</div>';
 
-    // Sub-tabs for Gospel & Praise & Worship on public view
     if (div === 'gospelpraise') {
-      const gColor = subDivisionColors.gospel;
-      const pColor = subDivisionColors.praiseandworship;
-      html += `
-        <div style="display:flex; gap:8px; margin: 12px 0;">
-          <button onclick="setPublicGospelSubTab('all')" style="flex:1; padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:${publicGospelSubTab === 'all' ? divColor : 'rgba(0,0,0,0.3)'}; color:${publicGospelSubTab === 'all' ? '#fff' : 'rgba(255,255,255,0.6)'}; font-weight:700; cursor:pointer; font-size:13px;">All</button>
-          <button onclick="setPublicGospelSubTab('gospel')" style="flex:1; padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:${publicGospelSubTab === 'gospel' ? gColor : 'rgba(0,0,0,0.3)'}; color:${publicGospelSubTab === 'gospel' ? '#fff' : 'rgba(255,255,255,0.6)'}; font-weight:700; cursor:pointer; font-size:13px;">Gospel</button>
-          <button onclick="setPublicGospelSubTab('praiseandworship')" style="flex:1; padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:${publicGospelSubTab === 'praiseandworship' ? pColor : 'rgba(0,0,0,0.3)'}; color:${publicGospelSubTab === 'praiseandworship' ? '#fff' : 'rgba(255,255,255,0.6)'}; font-weight:700; cursor:pointer; font-size:13px;">Praise & Worship</button>
-        </div>
-      `;
+      const purple = divisions.gospelpraise.color;
+      html += '<div style="display:flex; gap:8px; margin: 12px 0;">' +
+        '<button onclick="setPublicGospelSubTab('all')" style="flex:1; padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:' + (publicGospelSubTab === 'all' ? purple : 'rgba(0,0,0,0.3)') + '; color:' + (publicGospelSubTab === 'all' ? '#fff' : 'rgba(255,255,255,0.6)') + '; font-weight:700; cursor:pointer; font-size:13px;">All</button>' +
+        '<button onclick="setPublicGospelSubTab('gospel')" style="flex:1; padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:' + (publicGospelSubTab === 'gospel' ? purple : 'rgba(0,0,0,0.3)') + '; color:' + (publicGospelSubTab === 'gospel' ? '#fff' : 'rgba(255,255,255,0.6)') + '; font-weight:700; cursor:pointer; font-size:13px;">Gospel</button>' +
+        '<button onclick="setPublicGospelSubTab('praiseandworship')" style="flex:1; padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:' + (publicGospelSubTab === 'praiseandworship' ? purple : 'rgba(0,0,0,0.3)') + '; color:' + (publicGospelSubTab === 'praiseandworship' ? '#fff' : 'rgba(255,255,255,0.6)') + '; font-weight:700; cursor:pointer; font-size:13px;">Praise & Worship</button>' +
+        '</div>';
     }
 
     if (divSubs.length === 0) {
-      html += `<p style="padding:20px; color:rgba(255,255,255,0.4); font-size:13px;">No submissions in this category.</p>`;
+      html += '<p style="padding:20px; color:rgba(255,255,255,0.4); font-size:13px;">No submissions in this category.</p>';
     } else {
-      html += divSubs.map((sub, idx) => `
-        <div class="card" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
-          <div style="display:flex; align-items:center; gap:12px;">
-            <div style="font-size:20px; font-weight:800; color:${idx < 3 ? 'var(--brand-gold)' : 'rgba(255,255,255,0.4)'}; width:28px;">#${idx + 1}</div>
-            ${sub.image ? `<img src="${sub.image}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">` : ''}
-            <div>
-              <a href="${sub.link}" target="_blank" style="font-weight:700;font-size:15px;color:white;text-decoration:none;">${sub.title}</a>
-              <div style="font-size:13px;color:rgba(255,255,255,0.6);">by ${sub.author}</div>
-            </div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-weight:800;font-size:18px;color:var(--brand-gold);">${sub.avg !== null ? sub.avg + '%' : 'Pending'}</div>
-          </div>
-        </div>
-      `).join('');
+      html += divSubs.map((sub, idx) => '<div class="card" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:12px;">' +
+        '<div style="display:flex; align-items:center; gap:12px;">' +
+        '<div style="font-size:20px; font-weight:800; color:' + (idx < 3 ? 'var(--brand-gold)' : 'rgba(255,255,255,0.4)') + '; width:28px;">#' + (idx + 1) + '</div>' +
+        (sub.image ? '<img src="' + sub.image + '" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">' : '') +
+        '<div><a href="' + sub.link + '" target="_blank" style="font-weight:700;font-size:15px;color:white;text-decoration:none;">' + sub.title + '</a><div style="font-size:13px;color:rgba(255,255,255,0.6);">by ' + sub.author + '</div></div>' +
+        '</div>' +
+        '<div style="text-align:right;"><div style="font-weight:800;font-size:18px;color:var(--brand-gold);">' + (sub.avg !== null ? sub.avg + '%' : 'Pending') + '</div></div>' +
+        '</div>').join('');
     }
   });
 
@@ -627,25 +597,19 @@ function renderChallenges() {
     const divChals = chals.filter(c => c.challengeDivision === div || c.tags?.includes(div));
     const img = challengeImages[currentWeekId]?.[div];
 
-    html += `<div style="margin-top:20px;"><h2 style="color:${divisions[div].color}; font-size:18px; margin-bottom:10px;">${divisions[div].name} Challenge</h2>`;
-    if (img) html += `<img src="${img}" style="width:100%; max-height:200px; object-fit:cover; border-radius:10px; margin-bottom:14px;">`;
+    html += '<div style="margin-top:20px;"><h2 style="color:' + divisions[div].color + '; font-size:18px; margin-bottom:10px;">' + divisions[div].name + ' Challenge</h2>';
+    if (img) html += '<img src="' + img + '" style="width:100%; max-height:200px; object-fit:cover; border-radius:10px; margin-bottom:14px;">';
 
     if (divChals.length === 0) {
       html += '<p style="font-size:13px; color:rgba(255,255,255,0.4);">No challenge entries for this division yet.</p></div>';
       return;
     }
 
-    html += divChals.map(sub => `
-      <div class="card" style="border-left:4px solid ${divisions[div].color}; margin-bottom:10px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div style="font-weight:700; font-size:16px;">${sub.title}</div>
-            <div style="font-size:13px; color:rgba(255,255,255,0.6);">by ${sub.author}</div>
-          </div>
-          <a href="${sub.link}" target="_blank" style="padding:6px 12px; background:var(--brand-gold); color:#1a1a2e; text-decoration:none; font-weight:700; border-radius:6px; font-size:12px;">Play</a>
-        </div>
-      </div>
-    `).join('') + '</div>';
+    html += divChals.map(sub => '<div class="card" style="border-left:4px solid ' + divisions[div].color + '; margin-bottom:10px;">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+      '<div><div style="font-weight:700; font-size:16px;">' + sub.title + '</div><div style="font-size:13px; color:rgba(255,255,255,0.6);">by ' + sub.author + '</div></div>' +
+      '<a href="' + sub.link + '" target="_blank" style="padding:6px 12px; background:var(--brand-gold); color:#1a1a2e; text-decoration:none; font-weight:700; border-radius:6px; font-size:12px;">Play</a>' +
+      '</div></div>').join('') + '</div>';
   });
 
   list.innerHTML = html;
@@ -669,18 +633,9 @@ function renderResults() {
     if ($('podium3Name')) $('podium3Name').textContent = rankings[2]?.title || '—';
     if ($('podium3Score')) $('podium3Score').textContent = rankings[2]?.avg !== undefined ? rankings[2].avg + '%' : '—';
 
-    $('resultsList').innerHTML = rankings.slice(3).map((sub, idx) => `
-      <div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <div style="display:flex; align-items:center; gap:12px;">
-          <div style="font-weight:700; color:rgba(255,255,255,0.5);">#${idx + 4}</div>
-          <div>
-            <div style="font-weight:700;">${sub.title}</div>
-            <div style="font-size:12px; color:rgba(255,255,255,0.5);">by ${sub.author}</div>
-          </div>
-        </div>
-        <div style="font-weight:800; color:var(--brand-gold);">${sub.avg}%</div>
-      </div>
-    `).join('');
+    $('resultsList').innerHTML = rankings.slice(3).map((sub, idx) => '<div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+      '<div style="display:flex; align-items:center; gap:12px;"><div style="font-weight:700; color:rgba(255,255,255,0.5);">#' + (idx + 4) + '</div><div><div style="font-weight:700;">' + sub.title + '</div><div style="font-size:12px; color:rgba(255,255,255,0.5);">by ' + sub.author + '</div></div></div>' +
+      '<div style="font-weight:800; color:var(--brand-gold);">' + sub.avg + '%</div></div>').join('');
   }
 }
 
@@ -688,7 +643,7 @@ function updateCountdown() {
   if (resultsRevealed) return;
   const diff = revealTime - Date.now();
   if (diff <= 0) {
-    ['Days', 'Hours', 'Mins', 'Secs'].forEach(u => { if ($(`cd${u}`)) $(`cd${u}`).textContent = '00'; });
+    ['Days', 'Hours', 'Mins', 'Secs'].forEach(u => { if ($('cd' + u)) $('cd' + u).textContent = '00'; });
     return;
   }
   const d = Math.floor(diff / 86400000);
@@ -737,18 +692,9 @@ function updateDivisionOptions() {
   if (!divSelect) return;
 
   if (type === 'challenge') {
-    divSelect.innerHTML = `
-      <option value="english">English</option>
-      <option value="afrikaans">Afrikaans</option>
-    `;
+    divSelect.innerHTML = '<option value="english">English</option><option value="afrikaans">Afrikaans</option>';
   } else {
-    divSelect.innerHTML = `
-      <option value="english">English</option>
-      <option value="afrikaans">Afrikaans</option>
-      <option value="gospel">Gospel</option>
-      <option value="praiseandworship">Praise & Worship</option>
-      <option value="liveartists">Live Artists</option>
-    `;
+    divSelect.innerHTML = '<option value="english">English</option><option value="afrikaans">Afrikaans</option><option value="gospel">Gospel</option><option value="praiseandworship">Praise & Worship</option><option value="liveartists">Live Artists</option>';
   }
 }
 
@@ -802,7 +748,7 @@ async function uploadChallengeImage() {
   const res = await apiPost('/api/admin/challenge-image', { division: div, image: base64, weekId: currentWeekId });
   if (res.error) { toast(res.error, 'error'); return; }
 
-  toast(`Challenge banner uploaded for ${divisions[div]?.name || div}!`);
+  toast('Challenge banner uploaded for ' + (divisions[div]?.name || div) + '!');
   fileInput.value = '';
   if ($('challengeImgPreview')) $('challengeImgPreview').style.display = 'none';
   await loadData();
@@ -825,26 +771,15 @@ function renderAdminSubmissions() {
     const subScores = scores[sub.id] || {};
     const judgeCount = Object.keys(subScores).length;
     const avg = getAverageScore(sub.id);
-    return `
-      <div class="card" style="margin-top:12px;">
-        <div class="card-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
-          <div>
-            <div class="card-title" style="font-weight:700; font-size:16px;">${sub.title}</div>
-            <div class="card-meta" style="font-size:13px; color:rgba(255,255,255,0.6);">by ${sub.author} · ${(sub.tags || []).map(t => '#' + t).join(' ')}</div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:12px;color:rgba(255,255,255,0.5);">${judgeCount} judge(s) scored</div>
-            <div style="font-size:20px;font-weight:800;color:var(--brand-gold);">${avg !== null ? avg + '%' : '—'}</div>
-          </div>
-        </div>
-        ${sub.entryType === 'challenge' ? '<span class="challenge-badge">Challenge</span>' : ''}
-        ${sub.image ? `<img src="${sub.image}" style="margin-top:10px; max-width:120px; border-radius:6px;">` : ''}
-        <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
-          <a href="${sub.link}" target="_blank" style="font-size:12px; color:var(--brand-gold);">Open Link 🔗</a>
-          <button class="btn btn-danger" style="width:auto;padding:4px 12px;font-size:12px;" onclick="deleteSubmission('${sub.id}')">🗑️ Delete</button>
-        </div>
-      </div>
-    `;
+    return '<div class="card" style="margin-top:12px;">' +
+      '<div class="card-header" style="display:flex; justify-content:space-between; align-items:flex-start;">' +
+      '<div><div class="card-title" style="font-weight:700; font-size:16px;">' + sub.title + '</div><div class="card-meta" style="font-size:13px; color:rgba(255,255,255,0.6);">by ' + sub.author + ' · ' + (sub.tags || []).map(t => '#' + t).join(' ') + '</div></div>' +
+      '<div style="text-align:right;"><div style="font-size:12px;color:rgba(255,255,255,0.5);">' + judgeCount + ' judge(s) scored</div><div style="font-size:20px;font-weight:800;color:var(--brand-gold);">' + (avg !== null ? avg + '%' : '—') + '</div></div>' +
+      '</div>' +
+      (sub.entryType === 'challenge' ? '<span class="challenge-badge">Challenge</span>' : '') +
+      (sub.image ? '<img src="' + sub.image + '" style="margin-top:10px; max-width:120px; border-radius:6px;">' : '') +
+      '<div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;"><a href="' + sub.link + '" target="_blank" style="font-size:12px; color:var(--brand-gold);">Open Link 🔗</a><button class="btn btn-danger" style="width:auto;padding:4px 12px;font-size:12px;" onclick="deleteSubmission('' + sub.id + '')">🗑️ Delete</button></div>' +
+      '</div>';
   }).join('') || '<p class="text-center text-tertiary" style="padding:40px;">No submissions found.</p>';
 }
 
@@ -864,17 +799,15 @@ async function renderAdminJudges() {
   tbody.innerHTML = Object.entries(judgesData).map(([id, j]) => {
     const scoreCount = Object.values(scores).filter(s => s[j.name]).length;
     const totalSubs = getSubsForDivision(j.division).length;
-    return `
-      <tr>
-        <td style="font-weight:600; padding:10px;">${j.name}</td>
-        <td style="padding:10px;">${j.email}</td>
-        <td style="padding:10px;"><span class="tag ${j.division}" style="font-size:11px; padding:2px 8px;">${divisions[j.division]?.name || j.division}</span></td>
-        <td style="padding:10px; color:#6bff6b;">● Active</td>
-        <td style="padding:10px;">${j.hasSetPassword ? '✓ Changed' : 'Admin Set'}</td>
-        <td style="padding:10px;">${scoreCount} / ${totalSubs}</td>
-        <td style="padding:10px;"><button onclick="deleteJudge('${id}')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;">🗑️</button></td>
-      </tr>
-    `;
+    return '<tr>' +
+      '<td style="font-weight:600; padding:10px;">' + j.name + '</td>' +
+      '<td style="padding:10px;">' + j.email + '</td>' +
+      '<td style="padding:10px;"><span class="tag ' + j.division + '" style="font-size:11px; padding:2px 8px;">' + (divisions[j.division]?.name || j.division) + '</span></td>' +
+      '<td style="padding:10px; color:#6bff6b;">● Active</td>' +
+      '<td style="padding:10px;">' + (j.hasSetPassword ? '✓ Changed' : 'Admin Set') + '</td>' +
+      '<td style="padding:10px;">' + scoreCount + ' / ' + totalSubs + '</td>' +
+      '<td style="padding:10px;"><button onclick="deleteJudge('' + id + '')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;">🗑️</button></td>' +
+      '</tr>';
   }).join('') || '<tr><td colspan="7" style="text-align:center; padding:20px;">No judges configured.</td></tr>';
 }
 
@@ -897,7 +830,7 @@ async function addJudge() {
 
   const res = await apiPost('/api/judges', { name, email, division, password, photo });
   if (res.error) { toast(res.error, 'error'); return; }
-  toast(`Judge ${name} added successfully!`);
+  toast('Judge ' + name + ' added successfully!');
   $('newJudgeName').value = ''; $('newJudgeEmail').value = ''; $('newJudgePassword').value = '';
   if (photoInput) photoInput.value = '';
   if ($('newJudgePhotoPreview')) $('newJudgePhotoPreview').style.display = 'none';
@@ -916,12 +849,10 @@ function renderAdminResults() {
   const rankings = getRankings();
   const summary = $('adminScoreSummary');
   if (summary) {
-    summary.innerHTML = `
-      <div style="font-size:14px;margin-bottom:8px;"><span style="color:rgba(255,255,255,0.6);">Week ID:</span> <b>${currentWeekId}</b></div>
-      <div style="font-size:14px;margin-bottom:8px;"><span style="color:rgba(255,255,255,0.6);">Total Scored:</span> <b>${rankings.length} / ${submissions.length}</b></div>
-      <div style="font-size:14px;margin-bottom:8px;"><span style="color:rgba(255,255,255,0.6);">Current Leader:</span> <b>${rankings[0]?.title || 'None'}</b> ${rankings[0]?.avg !== undefined ? '(' + rankings[0].avg + '%)' : ''}</div>
-      <div style="font-size:14px;"><span style="color:rgba(255,255,255,0.6);">Status:</span> <b style="color:${resultsRevealed ? '#6bff6b' : 'var(--brand-gold)'}">${resultsRevealed ? 'REVEALED' : 'HIDDEN'}</b></div>
-    `;
+    summary.innerHTML = '<div style="font-size:14px;margin-bottom:8px;"><span style="color:rgba(255,255,255,0.6);">Week ID:</span> <b>' + currentWeekId + '</b></div>' +
+      '<div style="font-size:14px;margin-bottom:8px;"><span style="color:rgba(255,255,255,0.6);">Total Scored:</span> <b>' + rankings.length + ' / ' + submissions.length + '</b></div>' +
+      '<div style="font-size:14px;margin-bottom:8px;"><span style="color:rgba(255,255,255,0.6);">Current Leader:</span> <b>' + (rankings[0]?.title || 'None') + '</b> ' + (rankings[0]?.avg !== undefined ? '(' + rankings[0].avg + '%)' : '') + '</div>' +
+      '<div style="font-size:14px;"><span style="color:rgba(255,255,255,0.6);">Status:</span> <b style="color:' + (resultsRevealed ? '#6bff6b' : 'var(--brand-gold)') + '">' + (resultsRevealed ? 'REVEALED' : 'HIDDEN') + '</b></div>';
   }
 }
 
@@ -958,8 +889,8 @@ function exportExcel() {
     };
 
     Object.entries(subScores).forEach(([jName, scoreObj]) => {
-      row[`Judge (${jName}) Total`] = scoreObj.total + '%';
-      row[`Judge (${jName}) Breakdown`] = scoreObj.criteria.join('/');
+      row['Judge (' + jName + ') Total'] = scoreObj.total + '%';
+      row['Judge (' + jName + ') Breakdown'] = scoreObj.criteria.join('/');
     });
 
     return row;
@@ -968,7 +899,7 @@ function exportExcel() {
   const worksheet = XLSX.utils.json_to_sheet(exportData);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Submissions & Scores');
-  XLSX.writeFile(workbook, `Astra_Musica_${currentWeekId}_Results.xlsx`);
+  XLSX.writeFile(workbook, 'Astra_Musica_' + currentWeekId + '_Results.xlsx');
   toast('Excel export downloaded!');
 }
 
@@ -998,131 +929,3 @@ async function resetWeek() {
   renderAdminSubmissions();
   renderAdminResults();
 }
-
-function renderAdminSettings() {
-  renderDivisionLogoSettings();
-  renderNotificationSettings();
-}
-
-function renderNotificationSettings() {
-  const status = $('emailStatus');
-  if (status) {
-    status.textContent = emailEnabled ? 'Active (Configured)' : 'Disabled / Not Configured';
-    status.style.color = emailEnabled ? '#6bff6b' : '#ff6b6b';
-  }
-  if ($('testEmailWrap')) $('testEmailWrap').style.display = emailEnabled ? 'block' : 'none';
-
-  const list = $('whatsappNotifyList');
-  if (list) {
-    list.innerHTML = Object.values(judges).map(j => `
-      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
-        <div>
-          <div style="font-size:13px; font-weight:600;">${j.name}</div>
-          <div style="font-size:11px; color:rgba(255,255,255,0.5);">${divisions[j.division]?.name || j.division}</div>
-        </div>
-        <a href="https://wa.me/?text=${encodeURIComponent(`Hi ${j.name}, new submissions are ready for judging in ${divisions[j.division]?.name || j.division} on Astra Musica!`)}" target="_blank" class="btn btn-secondary" style="font-size:11px; padding:4px 10px; text-decoration:none;">📲 Send WhatsApp</a>
-      </div>
-    `).join('') || '<p style="font-size:12px; color:rgba(255,255,255,0.4);">No judges available.</p>';
-  }
-}
-
-async function sendTestEmail() {
-  const email = $('testEmailInput').value.trim();
-  if (!email) { toast('Enter email address', 'error'); return; }
-  const res = await apiPost('/api/admin/test-email', { email });
-  if (res.error) { toast(res.error, 'error'); return; }
-  toast('Test email sent successfully!');
-}
-
-async function updateLogo() {
-  const url = $('logoUrl').value.trim();
-  if (!url) { toast('Please enter a valid logo URL', 'error'); return; }
-  await apiPost('/api/admin/logo', { logoUrl: url });
-  mainLogoUrl = url;
-  renderMainLogo();
-  toast('Main logo updated!');
-}
-
-async function uploadLogoFile() {
-  const input = $('logoFileInput');
-  if (!input || !input.files || !input.files[0]) {
-    toast('Select a logo image file', 'error');
-    return;
-  }
-  const base64 = await fileToBase64(input.files[0]);
-  await apiPost('/api/admin/logo', { logoUrl: base64 });
-  mainLogoUrl = base64;
-  renderMainLogo();
-  toast('Main logo uploaded!');
-}
-
-function renderDivisionLogoSettings() {
-  const container = $('divisionLogosList');
-  if (!container) return;
-
-  container.innerHTML = Object.keys(divisions).map(div => {
-    const divColor = divisions[div].color;
-    const currentLogo = divisionLogos[div] || '';
-    return `
-      <div class="card" style="border-left: 4px solid ${divColor}; margin-bottom: 10px; padding:12px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-          <b style="color:${divColor}; font-size:14px;">${divisions[div].name}</b>
-          ${currentLogo ? `<img src="${currentLogo}" style="max-width:36px; max-height:36px; object-fit:contain; border-radius:4px;">` : ''}
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 8px;">
-          <input type="text" id="logo-input-${div}" value="${currentLogo}" placeholder="Logo URL..." style="flex: 1; padding:6px; font-size:12px;">
-          <button class="btn btn-primary" style="width:auto; padding:6px 12px; font-size:12px;" onclick="saveDivisionLogo('${div}')">Save</button>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-async function saveDivisionLogo(div) {
-  const url = $(`logo-input-${div}`).value.trim();
-  divisionLogos[div] = url;
-  await apiPost('/api/admin/division-logos', { division: div, logoUrl: url });
-  toast(`Logo updated for ${divisions[div].name}!`);
-  renderDivisionLogoSettings();
-}
-
-// ===================== FILE PREVIEWS & BINDINGS =====================
-function setupImagePreviews() {
-  const bindPreview = (inputId, previewId) => {
-    const input = $(inputId);
-    const preview = $(previewId);
-    if (input && preview) {
-      input.addEventListener('change', async () => {
-        if (input.files && input.files[0]) {
-          preview.src = await fileToBase64(input.files[0]);
-          preview.style.display = 'block';
-        }
-      });
-    }
-  };
-
-  bindPreview('mImage', 'mImagePreview');
-  bindPreview('challengeImg', 'challengeImgPreview');
-  bindPreview('newJudgePhoto', 'newJudgePhotoPreview');
-  bindPreview('tmPhoto', 'tmPhotoPreview');
-}
-
-// ===================== INITIALIZATION =====================
-window.addEventListener('DOMContentLoaded', async () => {
-  setupImagePreviews();
-
-  // Attach dynamic save button to manual submission form if missing
-  const parentForm = document.querySelector('#adminSubmissions .manual-form');
-  if (parentForm && !parentForm.querySelector('button.btn-gold')) {
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-gold full';
-    btn.style.marginTop = '12px';
-    btn.textContent = '➕ Save Submission';
-    btn.onclick = addManualSubmission;
-    parentForm.appendChild(btn);
-  }
-
-  // Load backend data and display role screen
-  await loadData();
-  showScreen('screenRole');
-});
