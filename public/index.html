@@ -8,6 +8,7 @@
   <!-- SheetJS for Excel Export Functionality -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <base target="_blank">
+<base target="_blank">
 </head>
 <body class="main-page">
   <div class="app-container">
@@ -98,6 +99,8 @@
         <button class="tab active" onclick="setJudgeTab('top20')" id="tabJudgeTop20">Top 20</button>
         <button class="tab" onclick="setJudgeTab('challenge')" id="tabJudgeChallenge">Challenge</button>
       </div>
+      <!-- Gospel / Praise & Worship sub-tabs for judges -->
+      <div id="judgeGospelPraiseTabs" style="display: none; margin-bottom: 16px; gap: 10px;"></div>
       <div id="judgeSubmissions"></div>
     </div>
 
@@ -114,8 +117,7 @@
         <button class="div-tab active" onclick="setPublicDiv('all')">🏠 All Divisions</button>
         <button class="div-tab" onclick="setPublicDiv('english')" style="border-color: rgba(196, 30, 58, 0.3);">🔴 English</button>
         <button class="div-tab" onclick="setPublicDiv('afrikaans')" style="border-color: rgba(34, 139, 34, 0.3);">🟢 Afrikaans</button>
-        <button class="div-tab" onclick="setPublicDiv('gospel')" style="border-color: rgba(139, 69, 19, 0.3);">🟤 Gospel</button>
-        <button class="div-tab" onclick="setPublicDiv('praiseandworship')" style="border-color: rgba(128, 0, 128, 0.3);">🟣 P&W</button>
+        <button class="div-tab" onclick="setPublicDiv('gospelpraise')" style="border-color: rgba(139, 69, 19, 0.3);">🟤 Gospel & P&W</button>
         <button class="div-tab" onclick="setPublicDiv('liveartists')" style="border-color: rgba(0, 128, 128, 0.3);">🔵 Live Artists</button>
       </div>
 

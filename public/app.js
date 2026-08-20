@@ -3,10 +3,14 @@ const API = '';
 const divisions = {
   english: { name: 'English', color: '#C41E3A' },
   afrikaans: { name: 'Afrikaans', color: '#228B22' },
-  gospel: { name: 'Gospel', color: '#8B4513' },
-  praiseandworship: { name: 'Praise & Worship', color: '#800080' },
-  gospelpraise: { name: 'Gospel & Praise', color: '#8B4513' },
+  gospelpraise: { name: 'Gospel & Praise & Worship', color: '#8B4513' },
   liveartists: { name: 'Live Artists', color: '#008080' }
+};
+
+// Sub-division colours for merged tabs (not full divisions)
+const subDivisionColors = {
+  gospel: '#8B4513',
+  praiseandworship: '#800080'
 };
 
 // ===================== STATE =====================
@@ -21,6 +25,7 @@ let revealTime = new Date('2026-08-14T20:00:00').getTime();
 let currentWeekId = '2026-W33';
 let publicDivFilter = 'all';
 let publicTab = 'top20';
+let publicGospelSubTab = 'all';
 let adminDivFilter = 'all';
 let judgeTab = 'top20';
 let currentGospelSubTab = 'gospel';
@@ -29,6 +34,7 @@ let divisionLogos = {};
 let teamMembers = [];
 let emailEnabled = false;
 let editingScores = {};
+let mainLogoUrl = '';
 
 // ===================== UTILS =====================
 function $(id) { return document.getElementById(id); }
@@ -82,7 +88,17 @@ function getChallengeSubs(weekId = currentWeekId) {
   });
 }
 
+// PUBLIC / ADMIN — shows everything inside the merged division
 function getSubsForDivision(div, weekId = currentWeekId) {
+  let subs = submissions.filter(s => s.weekId === weekId);
+  if (div === 'gospelpraise') {
+    return subs.filter(s => s.tags && (s.tags.includes('gospel') || s.tags.includes('praiseandworship')));
+  }
+  return subs.filter(s => s.tags && s.tags.includes(div));
+}
+
+// JUDGE ONLY — respects the active Gospel / P&W sub-tab
+function getJudgeQueue(div, weekId = currentWeekId) {
   let subs = submissions.filter(s => s.weekId === weekId);
   if (div === 'gospelpraise') {
     return subs.filter(s => s.tags && s.tags.includes(currentGospelSubTab));
@@ -148,11 +164,21 @@ async function loadData() {
   judges = await apiGet('/api/judges');
 
   if (allData.mainLogo) {
-    const logoBox = $('logoBox');
-    if (logoBox) logoBox.innerHTML = `<img src="${allData.mainLogo}" alt="Logo" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
+    mainLogoUrl = allData.mainLogo;
   }
-
+  renderMainLogo();
   renderTeamMembers();
+}
+
+// ===================== LOGO RENDERING =====================
+function renderMainLogo() {
+  const logoBox = $('logoBox');
+  if (!logoBox) return;
+  if (mainLogoUrl) {
+    logoBox.innerHTML = `<img src="${mainLogoUrl}" alt="Astra Musica" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
+  } else {
+    logoBox.textContent = 'AM';
+  }
 }
 
 // ===================== NAVIGATION & TEAM =====================
@@ -191,6 +217,7 @@ function goBack() {
   if ($('headerBadge')) $('headerBadge').innerHTML = '';
   setBodyClass('main-page');
   showScreen('screenRole');
+  renderMainLogo();
   renderTeamMembers();
 }
 
@@ -264,21 +291,6 @@ async function deleteTeamMember(index) {
   renderTeamMembers();
 }
 
-// ===================== INITIAL APP LOAD =====================
-async function initApp() {
-  try {
-    const data = await apiGet('/api/all-data');
-    if (data && Array.isArray(data.teamMembers)) {
-      teamMembers = data.teamMembers;
-    }
-    renderTeamMembers();
-  } catch (err) {
-    console.error('Failed to load initial app data:', err);
-  }
-}
-
-window.addEventListener('DOMContentLoaded', initApp);
-
 // ===================== JUDGE =====================
 async function loginJudge() {
   const email = $('judgeEmail').value.trim();
@@ -306,9 +318,33 @@ function setJudgeTab(tab) {
   renderJudgePanel();
 }
 
+function renderJudgeGospelPraiseTabs() {
+  const container = $('judgeGospelPraiseTabs');
+  if (!container) return;
+  if (currentJudge?.division === 'gospelpraise') {
+    container.style.display = 'flex';
+    const gospelColor = subDivisionColors.gospel;
+    const pwColor = subDivisionColors.praiseandworship;
+    container.innerHTML = `
+      <button onclick="switchJudgeSubTab('gospel')" style="flex:1; padding:10px 16px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:${currentGospelSubTab === 'gospel' ? gospelColor : 'rgba(0,0,0,0.3)'}; color:${currentGospelSubTab === 'gospel' ? '#fff' : 'rgba(255,255,255,0.6)'}; font-weight:700; cursor:pointer; font-size:13px;">Gospel</button>
+      <button onclick="switchJudgeSubTab('praiseandworship')" style="flex:1; padding:10px 16px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:${currentGospelSubTab === 'praiseandworship' ? pwColor : 'rgba(0,0,0,0.3)'}; color:${currentGospelSubTab === 'praiseandworship' ? '#fff' : 'rgba(255,255,255,0.6)'}; font-weight:700; cursor:pointer; font-size:13px;">Praise & Worship</button>
+    `;
+  } else {
+    container.style.display = 'none';
+    container.innerHTML = '';
+  }
+}
+
+function switchJudgeSubTab(tab) {
+  currentGospelSubTab = tab;
+  renderJudgePanel();
+}
+
 function renderJudgePanel() {
+  renderJudgeGospelPraiseTabs();
+
   const container = $('judgeSubmissions');
-  let divSubs = getSubsForDivision(currentJudge.division);
+  let divSubs = getJudgeQueue(currentJudge.division);
 
   if (judgeTab === 'challenge') {
     divSubs = divSubs.filter(s => s.entryType === 'challenge');
@@ -327,7 +363,7 @@ function renderJudgePanel() {
     const c = myScore ? myScore.criteria : (editingScores[sub.id] || [0, 0, 0, 0]);
 
     const activeDivKey = currentJudge.division === 'gospelpraise' ? currentGospelSubTab : currentJudge.division;
-    const divColor = divisions[activeDivKey]?.color || '#d4af37';
+    const divColor = divisions[activeDivKey]?.color || subDivisionColors[activeDivKey] || '#d4af37';
     const total = isScored ? myScore.total : Math.round(((c[0] + c[1] + c[2] + c[3]) / 40) * 100);
 
     return `
@@ -480,6 +516,7 @@ function setPublicTab(tab) {
 
 function setPublicDiv(div) {
   publicDivFilter = div;
+  publicGospelSubTab = 'all';
   document.querySelectorAll('#publicDivTabs .div-tab').forEach(b => b.classList.remove('active'));
   if (window.event && window.event.target) window.event.target.classList.add('active');
 
@@ -492,6 +529,11 @@ function setPublicDiv(div) {
   if (publicTab === 'top20') renderTop20();
 }
 
+function setPublicGospelSubTab(tab) {
+  publicGospelSubTab = tab;
+  renderTop20();
+}
+
 function renderTop20() {
   const list = $('top20List');
   if (!list) return;
@@ -500,13 +542,19 @@ function renderTop20() {
   let html = '';
   divs.forEach(div => {
     if (publicDivFilter !== 'all' && publicDivFilter !== div) return;
-    const divSubs = getSubsForDivision(div)
+
+    let allDivSubs = getSubsForDivision(div)
       .filter(s => s.entryType !== 'challenge')
       .map(s => ({ ...s, avg: getAverageScore(s.id) }))
-      .sort((a, b) => (b.avg || 0) - (a.avg || 0))
-      .slice(0, 20);
+      .sort((a, b) => (b.avg || 0) - (a.avg || 0));
 
-    if (divSubs.length === 0) return;
+    let divSubs = allDivSubs;
+    if (div === 'gospelpraise' && publicGospelSubTab !== 'all') {
+      divSubs = allDivSubs.filter(s => s.tags && s.tags.includes(publicGospelSubTab));
+    }
+    divSubs = divSubs.slice(0, 20);
+
+    if (allDivSubs.length === 0) return;
 
     const divColor = divisions[div].color;
     const divLogo = divisionLogos[div];
@@ -531,21 +579,38 @@ function renderTop20() {
     }
     html += `</div>`;
 
-    html += divSubs.map((sub, idx) => `
-      <div class="card" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
-        <div style="display:flex; align-items:center; gap:12px;">
-          <div style="font-size:20px; font-weight:800; color:${idx < 3 ? 'var(--brand-gold)' : 'rgba(255,255,255,0.4)'}; width:28px;">#${idx + 1}</div>
-          ${sub.image ? `<img src="${sub.image}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">` : ''}
-          <div>
-            <a href="${sub.link}" target="_blank" style="font-weight:700;font-size:15px;color:white;text-decoration:none;">${sub.title}</a>
-            <div style="font-size:13px;color:rgba(255,255,255,0.6);">by ${sub.author}</div>
+    // Sub-tabs for Gospel & Praise & Worship on public view
+    if (div === 'gospelpraise') {
+      const gColor = subDivisionColors.gospel;
+      const pColor = subDivisionColors.praiseandworship;
+      html += `
+        <div style="display:flex; gap:8px; margin: 12px 0;">
+          <button onclick="setPublicGospelSubTab('all')" style="flex:1; padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:${publicGospelSubTab === 'all' ? divColor : 'rgba(0,0,0,0.3)'}; color:${publicGospelSubTab === 'all' ? '#fff' : 'rgba(255,255,255,0.6)'}; font-weight:700; cursor:pointer; font-size:13px;">All</button>
+          <button onclick="setPublicGospelSubTab('gospel')" style="flex:1; padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:${publicGospelSubTab === 'gospel' ? gColor : 'rgba(0,0,0,0.3)'}; color:${publicGospelSubTab === 'gospel' ? '#fff' : 'rgba(255,255,255,0.6)'}; font-weight:700; cursor:pointer; font-size:13px;">Gospel</button>
+          <button onclick="setPublicGospelSubTab('praiseandworship')" style="flex:1; padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:${publicGospelSubTab === 'praiseandworship' ? pColor : 'rgba(0,0,0,0.3)'}; color:${publicGospelSubTab === 'praiseandworship' ? '#fff' : 'rgba(255,255,255,0.6)'}; font-weight:700; cursor:pointer; font-size:13px;">Praise & Worship</button>
+        </div>
+      `;
+    }
+
+    if (divSubs.length === 0) {
+      html += `<p style="padding:20px; color:rgba(255,255,255,0.4); font-size:13px;">No submissions in this category.</p>`;
+    } else {
+      html += divSubs.map((sub, idx) => `
+        <div class="card" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="font-size:20px; font-weight:800; color:${idx < 3 ? 'var(--brand-gold)' : 'rgba(255,255,255,0.4)'}; width:28px;">#${idx + 1}</div>
+            ${sub.image ? `<img src="${sub.image}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">` : ''}
+            <div>
+              <a href="${sub.link}" target="_blank" style="font-weight:700;font-size:15px;color:white;text-decoration:none;">${sub.title}</a>
+              <div style="font-size:13px;color:rgba(255,255,255,0.6);">by ${sub.author}</div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:800;font-size:18px;color:var(--brand-gold);">${sub.avg !== null ? sub.avg + '%' : 'Pending'}</div>
           </div>
         </div>
-        <div style="text-align:right;">
-          <div style="font-weight:800;font-size:18px;color:var(--brand-gold);">${sub.avg !== null ? sub.avg + '%' : 'Pending'}</div>
-        </div>
-      </div>
-    `).join('');
+      `).join('');
+    }
   });
 
   list.innerHTML = html || '<p class="text-center text-tertiary" style="padding:40px;">No submissions found.</p>';
@@ -973,7 +1038,8 @@ async function updateLogo() {
   const url = $('logoUrl').value.trim();
   if (!url) { toast('Please enter a valid logo URL', 'error'); return; }
   await apiPost('/api/admin/logo', { logoUrl: url });
-  if ($('logoBox')) $('logoBox').innerHTML = `<img src="${url}" alt="Logo" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
+  mainLogoUrl = url;
+  renderMainLogo();
   toast('Main logo updated!');
 }
 
@@ -985,7 +1051,8 @@ async function uploadLogoFile() {
   }
   const base64 = await fileToBase64(input.files[0]);
   await apiPost('/api/admin/logo', { logoUrl: base64 });
-  if ($('logoBox')) $('logoBox').innerHTML = `<img src="${base64}" alt="Logo" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
+  mainLogoUrl = base64;
+  renderMainLogo();
   toast('Main logo uploaded!');
 }
 
