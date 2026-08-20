@@ -475,7 +475,9 @@ app.get('/api/all-data', (req, res) => {
     challengeSubs: getChallengeSubs(),
     challengeImages,
     divisionLogos,
-    teamMembers
+    teamMembers,
+    emailEnabled: emailEnabled,
+    mainLogo: appLogo
   });
 });
 
@@ -491,8 +493,29 @@ app.get('/api/email-status', (req, res) => {
   });
 });
 
-// Test email endpoint
+// Test email endpoint (frontend calls /api/admin/test-email)
 app.post('/api/email-test', async (req, res) => {
+  if (!emailEnabled) {
+    return res.status(400).json({ success: false, error: 'Email not configured' });
+  }
+  const { to } = req.body;
+  if (!to) return res.status(400).json({ success: false, error: 'Email address required' });
+  try {
+    await sendBrevoEmail({
+      to,
+      subject: 'Astra Musica — SMTP Test',
+      html: '<p>Hi! This is a test email from Astra Musica. If you received this, your Brevo API configuration is working correctly.</p>'
+    });
+    console.log(`[EMAIL] Test email sent to ${to}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[EMAIL] Test email failed:', err.response?.data?.message || err.message);
+    res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
+  }
+});
+
+// Alias for frontend compatibility
+app.post('/api/admin/test-email', async (req, res) => {
   if (!emailEnabled) {
     return res.status(400).json({ success: false, error: 'Email not configured' });
   }
@@ -524,6 +547,25 @@ app.post('/api/team-members', async (req, res) => {
   res.json({ success: true, member });
 });
 
+// Alias for frontend compatibility
+app.post('/api/admin/team', async (req, res) => {
+  const { name, role, bio, photo } = req.body;
+  if (!name || !role) return res.status(400).json({ error: 'Name and role required' });
+  const member = { id: 'tm' + (teamMembers.length + 1), name, role, bio: bio || '', photo: photo || '' };
+  teamMembers.push(member);
+  await saveTeamMembers();
+  res.json({ success: true, teamMembers });
+});
+
+app.delete('/api/admin/team/:index', async (req, res) => {
+  const index = parseInt(req.params.index);
+  if (index >= 0 && index < teamMembers.length) {
+    teamMembers.splice(index, 1);
+    await saveTeamMembers();
+  }
+  res.json({ success: true, teamMembers });
+});
+
 app.post('/api/team-members/replace', async (req, res) => {
   const { members } = req.body;
   if (!Array.isArray(members)) return res.status(400).json({ error: 'Members array required' });
@@ -545,6 +587,15 @@ app.post('/api/division-logos', async (req, res) => {
   const { division, url } = req.body;
   if (!division || !url) return res.status(400).json({ error: 'Division and URL required' });
   divisionLogos[division] = url;
+  await saveDivisionLogos();
+  res.json({ success: true, divisionLogos });
+});
+
+// Alias for frontend compatibility
+app.post('/api/admin/division-logos', async (req, res) => {
+  const { division, logoUrl } = req.body;
+  if (!division || !logoUrl) return res.status(400).json({ error: 'Division and URL required' });
+  divisionLogos[division] = logoUrl;
   await saveDivisionLogos();
   res.json({ success: true, divisionLogos });
 });
@@ -627,6 +678,20 @@ app.post('/api/logo', async (req, res) => {
     );
   }
   res.json({ success: true, url });
+});
+
+// Alias for frontend compatibility
+app.post('/api/admin/logo', async (req, res) => {
+  const { logoUrl } = req.body;
+  appLogo = logoUrl;
+  if (db) {
+    await db.collection('settings').updateOne(
+      { _id: 'logo' },
+      { $set: { url: logoUrl } },
+      { upsert: true }
+    );
+  }
+  res.json({ success: true, url: logoUrl });
 });
 
 // Facebook polling
