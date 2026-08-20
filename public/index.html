@@ -23,11 +23,32 @@
       transition: opacity 0.4s ease, background-image 0.3s ease;
     }
     .screen-backdrop.active {
-      opacity: 0.07;
+      opacity: 0.12;
+      background-size: 45% auto;
     }
     .screen-backdrop.main-logo {
-      opacity: 0.10;
+      opacity: 0.14;
       background-size: 55% auto;
+    }
+    /* Soft red gradient for English division */
+    body.div-english {
+      background: linear-gradient(160deg, #1a1a2e 0%, #2e1a1a 30%, #1f0f0f 60%, #1a1a2e 100%);
+      background-attachment: fixed;
+    }
+    /* Soft green gradient for Afrikaans division */
+    body.div-afrikaans {
+      background: linear-gradient(160deg, #1a1a2e 0%, #1a2e1a 30%, #0f1f0f 60%, #1a1a2e 100%);
+      background-attachment: fixed;
+    }
+    /* Soft purple gradient for Gospel & Praise & Worship division */
+    body.div-gospelpraise {
+      background: linear-gradient(160deg, #1a1a2e 0%, #241538 30%, #1f0f2e 60%, #1a1a2e 100%);
+      background-attachment: fixed;
+    }
+    /* Soft teal gradient for Live Artists division */
+    body.div-liveartists {
+      background: linear-gradient(160deg, #1a1a2e 0%, #1a2e2e 30%, #0f1f1f 60%, #1a1a2e 100%);
+      background-attachment: fixed;
     }
     .screen > *:not(.screen-backdrop) {
       position: relative;
@@ -37,19 +58,6 @@
     .header {
       position: relative;
       z-index: 2;
-    }
-    /* Soft purple gradient for Gospel & Praise & Worship division */
-    body.div-gospelpraise {
-      background: linear-gradient(160deg, #1a1a2e 0%, #241538 25%, #1f0f2e 50%, #1a1a2e 100%);
-      background-attachment: fixed;
-    }
-    body.div-gospelpraise .card {
-      background: rgba(123, 79, 160, 0.08);
-      border-color: rgba(123, 79, 160, 0.25);
-    }
-    body.div-gospelpraise .role-card {
-      background: rgba(123, 79, 160, 0.12);
-      border-color: rgba(123, 79, 160, 0.3);
     }
   </style>
 <base target="_blank">
