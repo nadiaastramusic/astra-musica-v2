@@ -382,10 +382,10 @@ function renderJudgePanel() {
       '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">' +
       '<p style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.8);margin-bottom:14px;">Score this song (0-10 each):</p>' +
       '<div class="criteria-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;">' +
-      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Vocals</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','vocals',-1)">−</button><span class="score-value" id="val-vocals-' + sub.id + '">' + c[0] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','vocals',1)">+</button></div></div>' +
-      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Production</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','production',-1)">−</button><span class="score-value" id="val-production-' + sub.id + '">' + c[1] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','production',1)">+</button></div></div>' +
-      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Originality</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','originality',-1)">−</button><span class="score-value" id="val-originality-' + sub.id + '">' + c[2] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','originality',1)">+</button></div></div>' +
-      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Impact</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','impact',-1)">−</button><span class="score-value" id="val-impact-' + sub.id + '">' + c[3] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','impact',1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Vocals</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + ',\'vocals\',-1)">−</button><span class="score-value" id="val-vocals-' + sub.id + '">' + c[0] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + ',\'vocals\',1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Production</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + ',\'production\',-1)">−</button><span class="score-value" id="val-production-' + sub.id + '">' + c[1] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + ',\'production\',1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Originality</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + ',\'originality\',-1)">−</button><span class="score-value" id="val-originality-' + sub.id + '">' + c[2] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + ',\'originality\',1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Impact</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + ',\'impact\',-1)">−</button><span class="score-value" id="val-impact-' + sub.id + '">' + c[3] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + ',\'impact\',1)">+</button></div></div>' +
       '</div>' +
       '<div class="score-display" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;"><span class="label" style="font-size:15px;">Current Total</span><span class="value" id="display-total-' + sub.id + '" style="font-size:32px;font-weight:800;color:var(--brand-gold);">' + total + '%</span></div>' +
       '<div id="btn-container-' + sub.id + '" style="margin-top:12px;">' + (isScored ? '<button class="btn btn-secondary score-edit-btn" onclick="enableEdit(\'' + sub.id + \'')">✏️ Edit My Score</button>' : '<button class="btn btn-gold save-score-btn" id="save-btn-' + sub.id + '" onclick="saveScore(\'' + sub.id + \'')">💾 Save My Score</button>') + '</div>' +
@@ -416,7 +416,7 @@ function enableEdit(subId) {
   editingScores[subId] = myScore.criteria.slice();
   const container = $('btn-container-' + subId);
   if (container) {
-    container.innerHTML = '<button class="btn btn-gold save-score-btn" id="save-btn-' + subId + '" onclick="saveScore('' + subId + '')">💾 Update My Score</button>';
+    container.innerHTML = '<button class="btn btn-gold save-score-btn" id="save-btn-' + subId + '" onclick="saveScore(\'' + subId + \'')">💾 Update My Score</button>';
   }
   toast('You can now edit your score. Click Update when done.');
 }
@@ -938,7 +938,7 @@ function renderDivisionLogoSettings() {
       '</div>' +
       '<div style="display:flex;gap:8px;margin-top:8px;">' +
       '<input type="text" id="logo-input-' + div + '" value="' + currentLogo + '" placeholder="Logo URL..." style="flex:1;padding:6px;font-size:12px;">' +
-      '<button class="btn btn-primary" style="width:auto;padding:6px 12px;font-size:12px;" onclick="saveDivisionLogo('' + div + '')">Save</button>' +
+      '<button class="btn btn-primary" style="width:auto;padding:6px 12px;font-size:12px;" onclick="saveDivisionLogo(\'' + div + \'')">Save</button>' +
       '</div></div>';
   }).join('');
 }
