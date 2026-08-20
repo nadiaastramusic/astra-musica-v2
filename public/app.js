@@ -339,8 +339,8 @@ function renderJudgeGospelPraiseTabs() {
   if (currentJudge && currentJudge.division === 'gospelpraise') {
     container.style.display = 'flex';
     const purple = subDivisionColors.gospel;
-    container.innerHTML = '<button onclick="switchJudgeSubTab('gospel')" style="flex:1;padding:10px 16px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:' + (currentGospelSubTab === 'gospel' ? purple : 'rgba(0,0,0,0.3)') + ';color:' + (currentGospelSubTab === 'gospel' ? '#fff' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">Gospel</button>' +
-      '<button onclick="switchJudgeSubTab('praiseandworship')" style="flex:1;padding:10px 16px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:' + (currentGospelSubTab === 'praiseandworship' ? purple : 'rgba(0,0,0,0.3)') + ';color:' + (currentGospelSubTab === 'praiseandworship' ? '#fff' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">Praise & Worship</button>';
+    container.innerHTML = '<button onclick="switchJudgeSubTab(\'gospel\')" style="flex:1;padding:10px 16px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:' + (currentGospelSubTab === 'gospel' ? purple : 'rgba(0,0,0,0.3)') + ';color:' + (currentGospelSubTab === 'gospel' ? '#fff' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">Gospel</button>' +
+      '<button onclick="switchJudgeSubTab(\'praiseandworship\')" style="flex:1;padding:10px 16px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:' + (currentGospelSubTab === 'praiseandworship' ? purple : 'rgba(0,0,0,0.3)') + ';color:' + (currentGospelSubTab === 'praiseandworship' ? '#fff' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">Praise & Worship</button>';
   } else {
     container.style.display = 'none';
     container.innerHTML = '';
@@ -382,13 +382,13 @@ function renderJudgePanel() {
       '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">' +
       '<p style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.8);margin-bottom:14px;">Score this song (0-10 each):</p>' +
       '<div class="criteria-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;">' +
-      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Vocals</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore('' + sub.id + '','vocals',-1)">−</button><span class="score-value" id="val-vocals-' + sub.id + '">' + c[0] + '</span><button class="score-btn" onclick="adjustScore('' + sub.id + '','vocals',1)">+</button></div></div>' +
-      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Production</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore('' + sub.id + '','production',-1)">−</button><span class="score-value" id="val-production-' + sub.id + '">' + c[1] + '</span><button class="score-btn" onclick="adjustScore('' + sub.id + '','production',1)">+</button></div></div>' +
-      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Originality</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore('' + sub.id + '','originality',-1)">−</button><span class="score-value" id="val-originality-' + sub.id + '">' + c[2] + '</span><button class="score-btn" onclick="adjustScore('' + sub.id + '','originality',1)">+</button></div></div>' +
-      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Impact</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore('' + sub.id + '','impact',-1)">−</button><span class="score-value" id="val-impact-' + sub.id + '">' + c[3] + '</span><button class="score-btn" onclick="adjustScore('' + sub.id + '','impact',1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Vocals</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','vocals',-1)">−</button><span class="score-value" id="val-vocals-' + sub.id + '">' + c[0] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','vocals',1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Production</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','production',-1)">−</button><span class="score-value" id="val-production-' + sub.id + '">' + c[1] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','production',1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Originality</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','originality',-1)">−</button><span class="score-value" id="val-originality-' + sub.id + '">' + c[2] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','originality',1)">+</button></div></div>' +
+      '<div class="criterion"><label style="font-size:13px;display:block;margin-bottom:4px;">Impact</label><div class="score-control" style="display:flex;align-items:center;gap:8px;"><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','impact',-1)">−</button><span class="score-value" id="val-impact-' + sub.id + '">' + c[3] + '</span><button class="score-btn" onclick="adjustScore(\'' + sub.id + \','impact',1)">+</button></div></div>' +
       '</div>' +
       '<div class="score-display" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;"><span class="label" style="font-size:15px;">Current Total</span><span class="value" id="display-total-' + sub.id + '" style="font-size:32px;font-weight:800;color:var(--brand-gold);">' + total + '%</span></div>' +
-      '<div id="btn-container-' + sub.id + '" style="margin-top:12px;">' + (isScored ? '<button class="btn btn-secondary score-edit-btn" onclick="enableEdit('' + sub.id + '')">✏️ Edit My Score</button>' : '<button class="btn btn-gold save-score-btn" id="save-btn-' + sub.id + '" onclick="saveScore('' + sub.id + '')">💾 Save My Score</button>') + '</div>' +
+      '<div id="btn-container-' + sub.id + '" style="margin-top:12px;">' + (isScored ? '<button class="btn btn-secondary score-edit-btn" onclick="enableEdit(\'' + sub.id + \'')">✏️ Edit My Score</button>' : '<button class="btn btn-gold save-score-btn" id="save-btn-' + sub.id + '" onclick="saveScore(\'' + sub.id + \'')">💾 Save My Score</button>') + '</div>' +
       '<p style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:10px;">' + (isScored ? '✓ Your score is saved. Other judges cannot see it.' : 'Adjust all 4 criteria, then click Save.') + '</p>' +
       '</div></div>';
   }).join('');
@@ -513,9 +513,9 @@ function renderTop20() {
     if (div === 'gospelpraise') {
       const purple = divisions.gospelpraise.color;
       html += '<div style="display:flex;gap:8px;margin:12px 0;">' +
-        '<button onclick="setPublicGospelSubTab('all')" style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:' + (publicGospelSubTab === 'all' ? purple : 'rgba(0,0,0,0.3)') + ';color:' + (publicGospelSubTab === 'all' ? '#fff' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">All</button>' +
-        '<button onclick="setPublicGospelSubTab('gospel')" style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:' + (publicGospelSubTab === 'gospel' ? purple : 'rgba(0,0,0,0.3)') + ';color:' + (publicGospelSubTab === 'gospel' ? '#fff' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">Gospel</button>' +
-        '<button onclick="setPublicGospelSubTab('praiseandworship')" style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:' + (publicGospelSubTab === 'praiseandworship' ? purple : 'rgba(0,0,0,0.3)') + ';color:' + (publicGospelSubTab === 'praiseandworship' ? '#fff' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">Praise & Worship</button>' +
+        '<button onclick="setPublicGospelSubTab(\'all\')" style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:' + (publicGospelSubTab === 'all' ? purple : 'rgba(0,0,0,0.3)') + ';color:' + (publicGospelSubTab === 'all' ? '#fff' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">All</button>' +
+        '<button onclick="setPublicGospelSubTab(\'gospel\')" style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:' + (publicGospelSubTab === 'gospel' ? purple : 'rgba(0,0,0,0.3)') + ';color:' + (publicGospelSubTab === 'gospel' ? '#fff' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">Gospel</button>' +
+        '<button onclick="setPublicGospelSubTab(\'praiseandworship\')" style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:' + (publicGospelSubTab === 'praiseandworship' ? purple : 'rgba(0,0,0,0.3)') + ';color:' + (publicGospelSubTab === 'praiseandworship' ? '#fff' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">Praise & Worship</button>' +
         '</div>';
     }
     if (divSubs.length === 0) {
@@ -713,7 +713,7 @@ function renderAdminSubmissions() {
       '</div>' +
       (sub.entryType === 'challenge' ? '<span class="challenge-badge">Challenge</span>' : '') +
       (sub.image ? '<img src="' + sub.image + '" style="margin-top:10px;max-width:120px;border-radius:6px;">' : '') +
-      '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;"><a href="' + sub.link + '" target="_blank" style="font-size:12px;color:var(--brand-gold);">Open Link 🔗</a><button class="btn btn-danger" style="width:auto;padding:4px 12px;font-size:12px;" onclick="deleteSubmission('' + sub.id + '')">🗑️ Delete</button></div>' +
+      '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;"><a href="' + sub.link + '" target="_blank" style="font-size:12px;color:var(--brand-gold);">Open Link 🔗</a><button class="btn btn-danger" style="width:auto;padding:4px 12px;font-size:12px;" onclick="deleteSubmission(\'' + sub.id + \'')">🗑️ Delete</button></div>' +
       '</div>';
   }).join('') || '<p class="text-center text-tertiary" style="padding:40px;">No submissions found.</p>';
 }
@@ -741,7 +741,7 @@ async function renderAdminJudges() {
       '<td style="padding:10px;color:#6bff6b;">● Active</td>' +
       '<td style="padding:10px;">' + (j.hasSetPassword ? '✓ Changed' : 'Admin Set') + '</td>' +
       '<td style="padding:10px;">' + scoreCount + ' / ' + totalSubs + '</td>' +
-      '<td style="padding:10px;"><button onclick="deleteJudge('' + id + '')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;">🗑️</button></td>' +
+      '<td style="padding:10px;"><button onclick="deleteJudge(\'' + id + \'')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;">🗑️</button></td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="7" style="text-align:center;padding:20px;">No judges configured.</td></tr>';
 }
