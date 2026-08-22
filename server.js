@@ -83,28 +83,14 @@ let divisionLogos = {};
 let judges = {};
 let submissions = [];
 let scores = {};
-let resultsRevealed = false; // legacy fallback
-let revealTime = new Date('2026-08-14T20:00:00').getTime(); // legacy fallback
-let divisionRevealStatus = {
-  english: false,
-  afrikaans: false,
-  gospel: false,
-  praiseandworship: false,
-  liveartists: false
-};
-let divisionRevealTimes = {
-  english: new Date('2026-08-14T20:00:00').getTime(),
-  afrikaans: new Date('2026-08-14T20:00:00').getTime(),
-  gospel: new Date('2026-08-14T20:00:00').getTime(),
-  praiseandworship: new Date('2026-08-14T20:00:00').getTime(),
-  liveartists: new Date('2026-08-14T20:00:00').getTime()
-};
+let resultsRevealed = false;
+let revealTime = new Date('2026-08-14T20:00:00').getTime();
+let divisionRevealStatus = { english: false, afrikaans: false, gospel: false, praiseandworship: false, liveartists: false };
+let divisionRevealTimes = { english: revealTime, afrikaans: revealTime, gospel: revealTime, praiseandworship: revealTime, liveartists: revealTime };
 let currentWeekId = '2026-W33';
 let challengeImages = {};
 let teamMembers = [];
 let nextId = 1;
-let news = [];
-let submissionLikes = {};
 
 // ===================== MONGODB =====================
 let db = null;
@@ -138,16 +124,8 @@ async function loadFromDB() {
       revealTime = settings.revealTime || revealTime;
       currentWeekId = settings.currentWeekId || currentWeekId;
       nextId = settings.nextId || 1;
-      // Migrate or load per-division reveal
-      if (settings.divisionRevealStatus) {
-        divisionRevealStatus = { ...divisionRevealStatus, ...settings.divisionRevealStatus };
-      } else if (resultsRevealed) {
-        // Legacy: if old global reveal was true, reveal all divisions
-        Object.keys(divisionRevealStatus).forEach(d => divisionRevealStatus[d] = true);
-      }
-      if (settings.divisionRevealTimes) {
-        divisionRevealTimes = { ...divisionRevealTimes, ...settings.divisionRevealTimes };
-      }
+      if (settings.divisionRevealStatus) divisionRevealStatus = { ...divisionRevealStatus, ...settings.divisionRevealStatus };
+      if (settings.divisionRevealTimes) divisionRevealTimes = { ...divisionRevealTimes, ...settings.divisionRevealTimes };
     }
     const logoDoc = await db.collection('settings').findOne({ _id: 'logo' });
     if (logoDoc) appLogo = logoDoc.url || '';
@@ -170,17 +148,11 @@ async function loadFromDB() {
     const teamDoc = await db.collection('teamMembers').findOne({ _id: 'all' });
     if (teamDoc) teamMembers = teamDoc.data || [];
 
-    const newsDoc = await db.collection('news').findOne({ _id: 'all' });
-    if (newsDoc) news = newsDoc.data || [];
-
-    const likesDoc = await db.collection('likes').findOne({ _id: 'all' });
-    if (likesDoc) submissionLikes = likesDoc.data || {};
     console.log('[DB] Loaded from MongoDB:', {
       judges: Object.keys(judges).length,
       submissions: submissions.length,
       scores: Object.keys(scores).length,
       week: currentWeekId,
-      news: news.length,
       divisionLogos: Object.keys(divisionLogos).length
     });
   } catch (err) {
@@ -251,25 +223,6 @@ async function saveChallengeImages() {
   );
 }
 
-
-async function saveNews() {
-  if (!db) return;
-  await db.collection('news').updateOne(
-    { _id: 'all' },
-    { $set: { data: news } },
-    { upsert: true }
-  );
-}
-
-async function saveLikes() {
-  if (!db) return;
-  await db.collection('likes').updateOne(
-    { _id: 'all' },
-    { $set: { data: submissionLikes } },
-    { upsert: true }
-  );
-}
-
 // ===================== HELPERS =====================
 function calculatePercentage(criteria) {
   const sum = criteria.reduce((a, b) => a + (parseFloat(b) || 0), 0);
@@ -291,6 +244,14 @@ function getRankings(weekId = currentWeekId) {
     .sort((a, b) => b.avg - a.avg);
 }
 
+function getChallengeRankings(division, weekId = currentWeekId) {
+  return submissions
+    .filter(s => s.weekId === weekId && s.entryType === 'challenge' && (s.challengeDivision === division || (s.tags && s.tags.includes(division))))
+    .map(s => ({ ...s, avg: getAverageScore(s.id) }))
+    .filter(s => s.avg !== null)
+    .sort((a, b) => b.avg - a.avg);
+}
+
 function getChallengeSubs(weekId = currentWeekId) {
   const seen = new Set();
   return submissions.filter(s => {
@@ -300,14 +261,6 @@ function getChallengeSubs(weekId = currentWeekId) {
     seen.add(key);
     return true;
   });
-}
-
-function getChallengeRankings(division, weekId = currentWeekId) {
-  return submissions
-    .filter(s => s.weekId === weekId && s.entryType === 'challenge' && (s.challengeDivision === division || (s.tags && s.tags.includes(division))))
-    .map(s => ({ ...s, avg: getAverageScore(s.id) }))
-    .filter(s => s.avg !== null)
-    .sort((a, b) => b.avg - a.avg);
 }
 
 function getSubsForDivision(div, weekId = currentWeekId) {
@@ -511,11 +464,9 @@ app.post('/api/admin/reveal', async (req, res) => {
   const { division, revealed } = req.body;
   if (division && divisionRevealStatus.hasOwnProperty(division)) {
     divisionRevealStatus[division] = !!revealed;
-    // Also update legacy flag if any division is revealed
     resultsRevealed = Object.values(divisionRevealStatus).some(v => v);
   } else {
     resultsRevealed = !!revealed;
-    // Legacy mode: set all divisions
     Object.keys(divisionRevealStatus).forEach(d => divisionRevealStatus[d] = resultsRevealed);
   }
   await saveSettings();
@@ -524,9 +475,7 @@ app.post('/api/admin/reveal', async (req, res) => {
 
 app.post('/api/admin/set-reveal-time', async (req, res) => {
   const { division, timestamp } = req.body;
-  if (!division || !divisionRevealTimes.hasOwnProperty(division)) {
-    return res.status(400).json({ error: 'Valid division required' });
-  }
+  if (!division || !divisionRevealTimes.hasOwnProperty(division)) return res.status(400).json({ error: 'Valid division required' });
   divisionRevealTimes[division] = parseInt(timestamp);
   await saveSettings();
   res.json({ success: true, divisionRevealTimes });
@@ -554,16 +503,15 @@ app.get('/api/all-data', (req, res) => {
     challengeImages,
     divisionLogos,
     teamMembers,
+    divisionRevealStatus,
+    divisionRevealTimes,
     emailEnabled: emailEnabled,
-    news: news,
-    submissionLikes: submissionLikes,
     mainLogo: appLogo
   });
 });
 
 app.get('/api/challenge-rankings/:division', (req, res) => {
-  const division = req.params.division;
-  res.json(getChallengeRankings(division));
+  res.json(getChallengeRankings(req.params.division));
 });
 
 // Email status
@@ -790,81 +738,6 @@ async function pollFacebook() {
     console.error('[FB] Poll error:', err.response?.data?.error?.message || err.message);
   }
 }
-
-
-// News endpoints
-app.post('/api/admin/news', async (req, res) => {
-  const { title, content, image } = req.body;
-  if (!title || !content) return res.status(400).json({ error: 'Title and content required' });
-  const article = {
-    id: Date.now(),
-    title,
-    content,
-    image: image || '',
-    timestamp: new Date().toISOString(),
-    likes: 0,
-    comments: []
-  };
-  news.push(article);
-  await saveNews();
-  res.json({ success: true, article });
-});
-
-app.delete('/api/admin/news/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
-  news = news.filter(n => n.id !== id);
-  await saveNews();
-  res.json({ success: true });
-});
-
-app.post('/api/news/:id/comment', async (req, res) => {
-  const id = parseInt(req.params.id);
-  const article = news.find(n => n.id === id);
-  if (!article) return res.status(404).json({ error: 'Article not found' });
-  const { name, text } = req.body;
-  if (!name || !text) return res.status(400).json({ error: 'Name and text required' });
-  article.comments.push({ name, text, timestamp: new Date().toISOString() });
-  await saveNews();
-  res.json({ success: true });
-});
-
-app.post('/api/news/:id/like', async (req, res) => {
-  const id = parseInt(req.params.id);
-  const article = news.find(n => n.id === id);
-  if (!article) return res.status(404).json({ error: 'Article not found' });
-  article.likes = (article.likes || 0) + 1;
-  await saveNews();
-  res.json({ success: true, likes: article.likes });
-});
-
-// Submission likes
-app.post('/api/submissions/:id/like', async (req, res) => {
-  const id = parseInt(req.params.id);
-  submissionLikes[id] = (submissionLikes[id] || 0) + 1;
-  await saveLikes();
-  res.json({ success: true, likes: submissionLikes[id] });
-});
-
-// Admin reset judge password
-app.post('/api/admin/reset-judge-password', async (req, res) => {
-  const { judgeId, newPassword } = req.body;
-  if (!judges[judgeId]) return res.status(404).json({ error: 'Judge not found' });
-  if (!newPassword || newPassword.length < 4) return res.status(400).json({ error: 'Password must be at least 4 characters' });
-  judges[judgeId].password = newPassword;
-  judges[judgeId].hasSetPassword = false;
-  await saveJudges();
-  res.json({ success: true });
-});
-
-// Admin challenge image alias
-app.post('/api/admin/challenge-image', async (req, res) => {
-  const { weekId, division, image } = req.body;
-  if (!challengeImages[weekId]) challengeImages[weekId] = {};
-  challengeImages[weekId][division] = image;
-  await saveChallengeImages();
-  res.json({ success: true });
-});
-
 
 // ===================== STARTUP =====================
 async function start() {
