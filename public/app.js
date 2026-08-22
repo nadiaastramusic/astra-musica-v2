@@ -983,10 +983,10 @@ function renderAdminResults() {
         '</div>' +
         '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
         '<input type="datetime-local" id="reveal-time-' + div + '" value="' + dateStr + '" style="padding:6px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:white;font-size:13px;">' +
-        '<button class="btn btn-primary" onclick="saveRevealTime('" + div + "')" style="padding:6px 14px;font-size:12px;">💾 Save Time</button>' +
+        '<button class="btn btn-primary" onclick="saveRevealTime(\'' + div + \'')" style="padding:6px 14px;font-size:12px;">💾 Save Time</button>' +
         (isRevealed ? 
-          '<button class="btn btn-secondary" onclick="hideDivisionResults('" + div + "')" style="padding:6px 14px;font-size:12px;">🔒 Hide</button>' :
-          '<button class="btn btn-gold" onclick="revealDivisionResults('" + div + "')" style="padding:6px 14px;font-size:12px;">🔓 Reveal Now</button>'
+          '<button class="btn btn-secondary" onclick="hideDivisionResults(\'' + div + \'')" style="padding:6px 14px;font-size:12px;">🔒 Hide</button>' :
+          '<button class="btn btn-gold" onclick="revealDivisionResults(\'' + div + \'')" style="padding:6px 14px;font-size:12px;">🔓 Reveal Now</button>'
         ) +
         '</div></div>';
     }).join('');
