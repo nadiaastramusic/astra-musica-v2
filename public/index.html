@@ -232,6 +232,7 @@
       <div class="tabs">
         <button class="tab active" onclick="setAdminTab('submissions')" id="tabAdminSubmissions">Submissions</button>
         <button class="tab" onclick="setAdminTab('judges')" id="tabAdminJudges">Judges</button>
+        <button class="tab" onclick="setAdminTab('challenges')" id="tabAdminChallenges">🏆 Challenges</button>
         <button class="tab" onclick="setAdminTab('news')" id="tabAdminNews">📰 News</button>
         <button class="tab" onclick="setAdminTab('results')" id="tabAdminResults">Results</button>
         <button class="tab" onclick="setAdminTab('settings')" id="tabAdminSettings">Settings</button>
@@ -363,17 +364,23 @@
         <div id="adminNewsList"></div>
       </div>
 
+      <!-- Challenges Tab -->
+      <div id="adminChallenges" class="hidden">
+        <div class="div-tabs" id="adminChallengeDivTabs" style="margin-bottom: 16px;">
+          <button class="div-tab active" onclick="setAdminChallengeDiv('english')" style="border-color: rgba(196, 30, 58, 0.3);">🔴 English</button>
+          <button class="div-tab" onclick="setAdminChallengeDiv('afrikaans')" style="border-color: rgba(34, 139, 34, 0.3);">🟢 Afrikaans</button>
+        </div>
+        <div id="adminChallengeList"></div>
+      </div>
+
       <!-- Results Tab -->
       <div id="adminResults" class="hidden">
-        <div class="card" style="max-width: 500px;">
-          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--brand-gold);">Results Reveal Control</h3>
-          <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-            <button class="btn btn-primary" onclick="revealResults()">Reveal Results Now</button>
-            <button class="btn btn-secondary" onclick="hideResults()">Hide Results</button>
-          </div>
-          <p style="font-size: 13px; color: rgba(255, 255, 255, 0.4);">When revealed, the public and judges will see the final rankings and podium.</p>
+        <div class="card" style="max-width: 600px;">
+          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--brand-gold);">⏰ Per-Division Reveal Control</h3>
+          <p style="font-size: 13px; color: rgba(255, 255, 255, 0.4); margin-bottom: 16px;">Set a reveal date/time for each division. You can reveal or hide results independently.</p>
+          <div id="adminRevealControls"></div>
         </div>
-        <div class="card mt-2" style="max-width: 500px;">
+        <div class="card mt-2" style="max-width: 600px;">
           <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px; color: var(--brand-gold);">Scoring Summary</h3>
           <div id="adminScoreSummary"></div>
         </div>

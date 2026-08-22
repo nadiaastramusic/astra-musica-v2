@@ -21,6 +21,18 @@ let scores = {};
 let judges = {};
 let resultsRevealed = false;
 let revealTime = new Date('2026-08-14T20:00:00').getTime();
+let divisionRevealStatus = {
+  english: false, afrikaans: false, gospel: false,
+  praiseandworship: false, liveartists: false
+};
+let divisionRevealTimes = {
+  english: new Date('2026-08-14T20:00:00').getTime(),
+  afrikaans: new Date('2026-08-14T20:00:00').getTime(),
+  gospel: new Date('2026-08-14T20:00:00').getTime(),
+  praiseandworship: new Date('2026-08-14T20:00:00').getTime(),
+  liveartists: new Date('2026-08-14T20:00:00').getTime()
+};
+let adminChallengeDiv = 'english';
 let currentWeekId = '2026-W33';
 let publicDivFilter = 'all';
 let publicTab = 'top20';
@@ -161,6 +173,8 @@ async function loadData() {
   scores = allData.scores || {};
   resultsRevealed = !!allData.resultsRevealed;
   if (allData.revealTime) revealTime = allData.revealTime;
+  if (allData.divisionRevealStatus) divisionRevealStatus = allData.divisionRevealStatus;
+  if (allData.divisionRevealTimes) divisionRevealTimes = allData.divisionRevealTimes;
   currentWeekId = allData.weekId || currentWeekId;
   challengeImages = allData.challengeImages || {};
   divisionLogos = allData.divisionLogos || {};
@@ -560,56 +574,147 @@ function renderTop20() {
 function renderChallenges() {
   const list = $('challengesList');
   if (!list) return;
-  const chals = getChallengeSubs();
   const divs = ['english', 'afrikaans'];
   let html = '';
   divs.forEach(function(div) {
-    const divChals = chals.filter(function(c) { return c.challengeDivision === div || (c.tags && c.tags.indexOf(div) !== -1); });
+    const divColor = divisions[div].color;
+    const isRevealed = divisionRevealStatus[div];
+    const revealTs = divisionRevealTimes[div] || revealTime;
+    const divChals = getChallengeSubs().filter(function(c) { return c.challengeDivision === div || (c.tags && c.tags.indexOf(div) !== -1); });
+    const ranked = divChals.map(function(s) { return Object.assign({}, s, { avg: getAverageScore(s.id) }); }).filter(function(s) { return s.avg !== null; }).sort(function(a, b) { return b.avg - a.avg; });
     const img = challengeImages[currentWeekId] ? challengeImages[currentWeekId][div] : null;
-    html += '<div style="margin-top:20px;"><h2 style="color:' + divisions[div].color + ';font-size:18px;margin-bottom:10px;">' + divisions[div].name + ' Challenge</h2>';
+
+    html += '<div style="margin-top:24px;padding:16px;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.05);">';
+    html += '<h2 style="color:' + divColor + ';font-size:18px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">' + divisions[div].name + ' Challenge' + (isRevealed ? ' <span style="font-size:12px;background:rgba(107,255,107,0.15);color:#6bff6b;padding:2px 10px;border-radius:12px;">✓ Results Revealed</span>' : '') + '</h2>';
     if (img) html += '<img src="' + img + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:14px;">';
-    if (divChals.length === 0) {
-      html += '<p style="font-size:13px;color:rgba(255,255,255,0.4);">No challenge entries for this division yet.</p></div>';
-      return;
-    }
-    html += divChals.map(function(sub) {
-      return '<div class="card" style="border-left:4px solid ' + divisions[div].color + ';margin-bottom:10px;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-        '<div><div style="font-weight:700;font-size:16px;">' + sub.title + '</div><div style="font-size:13px;color:rgba(255,255,255,0.6);">by ' + sub.author + '</div></div>' +
-        '<a href="' + sub.link + '" target="_blank" style="padding:6px 12px;background:var(--brand-gold);color:#1a1a2e;text-decoration:none;font-weight:700;border-radius:6px;font-size:12px;">Play</a>' +
+
+    if (!isRevealed) {
+      const diff = revealTs - Date.now();
+      const d = Math.max(0, Math.floor(diff / 86400000));
+      const h = Math.max(0, Math.floor((diff % 86400000) / 3600000));
+      const m = Math.max(0, Math.floor((diff % 3600000) / 60000));
+      const s = Math.max(0, Math.floor((diff % 60000) / 1000));
+      html += '<div style="background:rgba(0,0,0,0.2);padding:14px;border-radius:8px;text-align:center;margin-bottom:12px;">' +
+        '<p style="font-size:13px;color:rgba(255,255,255,0.5);margin:0 0 8px 0;">Results revealed in:</p>' +
+        '<div style="display:flex;justify-content:center;gap:12px;">' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--brand-gold);">' + String(d).padStart(2,'0') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">days</div></div>' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--brand-gold);">' + String(h).padStart(2,'0') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">hrs</div></div>' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--brand-gold);">' + String(m).padStart(2,'0') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">mins</div></div>' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--brand-gold);">' + String(s).padStart(2,'0') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">secs</div></div>' +
         '</div></div>';
-    }).join('') + '</div>';
+    }
+
+    if (divChals.length === 0) {
+      html += '<p style="font-size:13px;color:rgba(255,255,255,0.4);">No challenge entries for this division yet.</p>';
+    } else if (isRevealed && ranked.length > 0) {
+      // Show podium for top 3
+      html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">';
+      [1,0,2].forEach(function(pos) {
+        const sub = ranked[pos];
+        if (!sub) return;
+        const isFirst = pos === 0;
+        html += '<div style="background:' + (isFirst ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.03)') + ';padding:14px;border-radius:10px;text-align:center;border:1px solid ' + (isFirst ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.05)') + ';' + (isFirst ? 'transform:scale(1.05);' : '') + '">' +
+          '<div style="font-size:28px;margin-bottom:4px;">' + (isFirst ? '🥇' : pos === 1 ? '🥈' : '🥉') + '</div>' +
+          '<div style="font-weight:700;font-size:14px;color:white;margin-bottom:2px;">' + sub.title + '</div>' +
+          '<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:6px;">by ' + sub.author + '</div>' +
+          '<div style="font-size:20px;font-weight:800;color:var(--brand-gold);">' + sub.avg + '%</div>' +
+          '</div>';
+      });
+      html += '</div>';
+      // Full ranked list
+      html += ranked.map(function(sub, idx) {
+        return '<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;border-left:3px solid ' + divColor + ';">' +
+          '<div style="display:flex;align-items:center;gap:12px;">' +
+          '<div style="font-weight:800;color:' + (idx < 3 ? 'var(--brand-gold)' : 'rgba(255,255,255,0.4)') + ';width:28px;">#' + (idx + 1) + '</div>' +
+          '<div><div style="font-weight:700;font-size:14px;color:white;">' + sub.title + '</div><div style="font-size:12px;color:rgba(255,255,255,0.5);">by ' + sub.author + '</div></div>' +
+          '</div>' +
+          '<div style="font-weight:800;font-size:16px;color:var(--brand-gold);">' + sub.avg + '%</div>' +
+          '</div>';
+      }).join('');
+    } else {
+      // Not revealed yet - just show entries without scores
+      html += divChals.map(function(sub) {
+        return '<div class="card" style="border-left:4px solid ' + divColor + ';margin-bottom:10px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+          '<div><div style="font-weight:700;font-size:16px;">' + sub.title + '</div><div style="font-size:13px;color:rgba(255,255,255,0.6);">by ' + sub.author + '</div></div>' +
+          '<a href="' + sub.link + '" target="_blank" style="padding:6px 12px;background:var(--brand-gold);color:#1a1a2e;text-decoration:none;font-weight:700;border-radius:6px;font-size:12px;">Play</a>' +
+          '</div></div>';
+      }).join('');
+    }
+    html += '</div>';
   });
   list.innerHTML = html;
 }
 
 function renderResults() {
-  if (!resultsRevealed) {
-    show('resultsCountdownWrap'); hide('resultsContent');
-    updateCountdown();
-  } else {
-    hide('resultsCountdownWrap'); show('resultsContent');
-    const rankings = getRankings();
-    if (rankings.length === 0) {
-      $('resultsList').innerHTML = '<p class="text-center text-tertiary" style="padding:40px;">No final scores available.</p>';
-      return;
+  const container = $('resultsContent');
+  if (!container) return;
+
+  const divs = Object.keys(divisions);
+  let html = '';
+
+  divs.forEach(function(div) {
+    const isRevealed = divisionRevealStatus[div];
+    const revealTs = divisionRevealTimes[div] || revealTime;
+    const divColor = divisions[div].color;
+    let divRankings = getRankings().filter(function(s) { return s.tags && s.tags.indexOf(div) !== -1; });
+    if (div === 'gospelpraise') {
+      divRankings = getRankings().filter(function(s) { return s.tags && (s.tags.indexOf('gospel') !== -1 || s.tags.indexOf('praiseandworship') !== -1); });
     }
-    if ($('podium1Name')) $('podium1Name').textContent = rankings[0] ? rankings[0].title : '—';
-    if ($('podium1Score')) $('podium1Score').textContent = rankings[0] && rankings[0].avg !== undefined ? rankings[0].avg + '%' : '—';
-    if ($('podium2Name')) $('podium2Name').textContent = rankings[1] ? rankings[1].title : '—';
-    if ($('podium2Score')) $('podium2Score').textContent = rankings[1] && rankings[1].avg !== undefined ? rankings[1].avg + '%' : '—';
-    if ($('podium3Name')) $('podium3Name').textContent = rankings[2] ? rankings[2].title : '—';
-    if ($('podium3Score')) $('podium3Score').textContent = rankings[2] && rankings[2].avg !== undefined ? rankings[2].avg + '%' : '—';
-    $('resultsList').innerHTML = rankings.slice(3).map(function(sub, idx) {
-      return '<div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-        '<div style="display:flex;align-items:center;gap:12px;"><div style="font-weight:700;color:rgba(255,255,255,0.5);">#' + (idx + 4) + '</div><div><div style="font-weight:700;">' + sub.title + '</div><div style="font-size:12px;color:rgba(255,255,255,0.5);">by ' + sub.author + '</div></div></div>' +
-        '<div style="font-weight:800;color:var(--brand-gold);">' + sub.avg + '%</div></div>';
-    }).join('');
-  }
+
+    html += '<div style="margin-top:24px;padding:16px;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.05);">';
+    html += '<h2 style="color:' + divColor + ';font-size:18px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">' + divisions[div].name + (isRevealed ? ' <span style="font-size:12px;background:rgba(107,255,107,0.15);color:#6bff6b;padding:2px 10px;border-radius:12px;">✓ Revealed</span>' : ' <span style="font-size:12px;background:rgba(212,175,55,0.15);color:var(--brand-gold);padding:2px 10px;border-radius:12px;">⏳ Hidden</span>') + '</h2>';
+
+    if (!isRevealed) {
+      const diff = revealTs - Date.now();
+      const d = Math.max(0, Math.floor(diff / 86400000));
+      const h = Math.max(0, Math.floor((diff % 86400000) / 3600000));
+      const m = Math.max(0, Math.floor((diff % 3600000) / 60000));
+      const s = Math.max(0, Math.floor((diff % 60000) / 1000));
+      html += '<div style="background:rgba(0,0,0,0.2);padding:14px;border-radius:8px;text-align:center;">' +
+        '<p style="font-size:13px;color:rgba(255,255,255,0.5);margin:0 0 8px 0;">Results revealed in:</p>' +
+        '<div style="display:flex;justify-content:center;gap:12px;">' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--brand-gold);">' + String(d).padStart(2,'0') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">days</div></div>' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--brand-gold);">' + String(h).padStart(2,'0') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">hrs</div></div>' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--brand-gold);">' + String(m).padStart(2,'0') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">mins</div></div>' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--brand-gold);">' + String(s).padStart(2,'0') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">secs</div></div>' +
+        '</div></div>';
+    } else if (divRankings.length === 0) {
+      html += '<p style="font-size:13px;color:rgba(255,255,255,0.4);padding:20px;">No scores available for this division.</p>';
+    } else {
+      // Podium
+      html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">';
+      [1,0,2].forEach(function(pos) {
+        const sub = divRankings[pos];
+        if (!sub) return;
+        const isFirst = pos === 0;
+        html += '<div style="background:' + (isFirst ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.03)') + ';padding:14px;border-radius:10px;text-align:center;border:1px solid ' + (isFirst ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.05)') + ';' + (isFirst ? 'transform:scale(1.05);' : '') + '">' +
+          '<div style="font-size:28px;margin-bottom:4px;">' + (isFirst ? '🥇' : pos === 1 ? '🥈' : '🥉') + '</div>' +
+          '<div style="font-weight:700;font-size:14px;color:white;margin-bottom:2px;">' + sub.title + '</div>' +
+          '<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:6px;">by ' + sub.author + '</div>' +
+          '<div style="font-size:20px;font-weight:800;color:var(--brand-gold);">' + sub.avg + '%</div>' +
+          '</div>';
+      });
+      html += '</div>';
+      // Rest of rankings
+      html += divRankings.slice(3).map(function(sub, idx) {
+        return '<div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<div style="display:flex;align-items:center;gap:12px;"><div style="font-weight:700;color:rgba(255,255,255,0.5);">#' + (idx + 4) + '</div><div><div style="font-weight:700;">' + sub.title + '</div><div style="font-size:12px;color:rgba(255,255,255,0.5);">by ' + sub.author + '</div></div></div>' +
+          '<div style="font-weight:800;color:var(--brand-gold);">' + sub.avg + '%</div></div>';
+      }).join('');
+    }
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+  hide('resultsCountdownWrap');
+  show('resultsContent');
 }
 
 function updateCountdown() {
-  if (resultsRevealed) return;
+  if (publicTab === 'challenges') renderChallenges();
+  if (publicTab === 'results') renderResults();
+  // Legacy single countdown (kept for compatibility)
   const diff = revealTime - Date.now();
   if (diff <= 0) {
     ['Days', 'Hours', 'Mins', 'Secs'].forEach(function(u) { const el = $('cd' + u); if (el) el.textContent = '00'; });
@@ -645,10 +750,11 @@ function setAdminTab(tab) {
   document.querySelectorAll('#screenAdmin .tab').forEach(function(t) { t.classList.remove('active'); });
   const tabBtn = $('tabAdmin' + tab.charAt(0).toUpperCase() + tab.slice(1));
   if (tabBtn) tabBtn.classList.add('active');
-  hide('adminSubmissions'); hide('adminJudges'); hide('adminResults'); hide('adminSettings'); hide('adminNews');
+  hide('adminSubmissions'); hide('adminJudges'); hide('adminChallenges'); hide('adminResults'); hide('adminSettings'); hide('adminNews');
   show('admin' + tab.charAt(0).toUpperCase() + tab.slice(1));
   if (tab === 'submissions') renderAdminSubmissions();
   if (tab === 'judges') renderAdminJudges();
+  if (tab === 'challenges') renderAdminChallenges();
   if (tab === 'results') renderAdminResults();
   if (tab === 'settings') renderAdminSettings();
   if (tab === 'news') renderAdminNews();
@@ -859,24 +965,59 @@ function renderAdminResults() {
   if (summary) {
     summary.innerHTML = '<div style="font-size:14px;margin-bottom:8px;"><span style="color:rgba(255,255,255,0.6);">Week ID:</span> <b>' + currentWeekId + '</b></div>' +
       '<div style="font-size:14px;margin-bottom:8px;"><span style="color:rgba(255,255,255,0.6);">Total Scored:</span> <b>' + rankings.length + ' / ' + submissions.length + '</b></div>' +
-      '<div style="font-size:14px;margin-bottom:8px;"><span style="color:rgba(255,255,255,0.6);">Current Leader:</span> <b>' + (rankings[0] ? rankings[0].title : 'None') + '</b> ' + (rankings[0] && rankings[0].avg !== undefined ? '(' + rankings[0].avg + '%)' : '') + '</div>' +
-      '<div style="font-size:14px;"><span style="color:rgba(255,255,255,0.6);">Status:</span> <b style="color:' + (resultsRevealed ? '#6bff6b' : 'var(--brand-gold)') + '">' + (resultsRevealed ? 'REVEALED' : 'HIDDEN') + '</b></div>';
+      '<div style="font-size:14px;margin-bottom:8px;"><span style="color:rgba(255,255,255,0.6);">Current Leader:</span> <b>' + (rankings[0] ? rankings[0].title : 'None') + '</b> ' + (rankings[0] && rankings[0].avg !== undefined ? '(' + rankings[0].avg + '%)' : '') + '</div>';
+  }
+  // Render per-division reveal controls
+  const revealContainer = $('adminRevealControls');
+  if (revealContainer) {
+    const divs = Object.keys(divisions);
+    revealContainer.innerHTML = divs.map(function(div) {
+      const isRevealed = divisionRevealStatus[div];
+      const revealTs = divisionRevealTimes[div] || revealTime;
+      const dateStr = new Date(revealTs).toISOString().slice(0, 16);
+      const divColor = divisions[div].color;
+      return '<div class="card" style="border-left:4px solid ' + divColor + ';margin-bottom:12px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+        '<h4 style="margin:0;color:' + divColor + ';font-size:15px;">' + divisions[div].name + '</h4>' +
+        '<span style="font-size:12px;padding:3px 10px;border-radius:10px;background:' + (isRevealed ? 'rgba(107,255,107,0.15)' : 'rgba(212,175,55,0.15)') + ';color:' + (isRevealed ? '#6bff6b' : 'var(--brand-gold)') + ';">' + (isRevealed ? '✓ Revealed' : '⏳ Hidden') + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
+        '<input type="datetime-local" id="reveal-time-' + div + '" value="' + dateStr + '" style="padding:6px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:white;font-size:13px;">' +
+        '<button class="btn btn-primary" onclick="saveRevealTime('' + div + '')" style="padding:6px 14px;font-size:12px;">💾 Save Time</button>' +
+        (isRevealed ? 
+          '<button class="btn btn-secondary" onclick="hideDivisionResults('' + div + '')" style="padding:6px 14px;font-size:12px;">🔒 Hide</button>' :
+          '<button class="btn btn-gold" onclick="revealDivisionResults('' + div + '')" style="padding:6px 14px;font-size:12px;">🔓 Reveal Now</button>'
+        ) +
+        '</div></div>';
+    }).join('');
   }
 }
 
-async function revealResults() {
-  await apiPost('/api/admin/reveal', { revealed: true });
-  resultsRevealed = true;
-  toast('Results revealed to public!');
+async function saveRevealTime(div) {
+  const input = $('reveal-time-' + div);
+  if (!input || !input.value) { toast('Select a date and time', 'error'); return; }
+  const ts = new Date(input.value).getTime();
+  await apiPost('/api/admin/set-reveal-time', { division: div, timestamp: ts });
+  divisionRevealTimes[div] = ts;
+  toast('Reveal time updated for ' + divisions[div].name);
   renderAdminResults();
 }
 
-async function hideResults() {
-  await apiPost('/api/admin/reveal', { revealed: false });
-  resultsRevealed = false;
-  toast('Results hidden from public.');
+async function revealDivisionResults(div) {
+  await apiPost('/api/admin/reveal', { division: div, revealed: true });
+  divisionRevealStatus[div] = true;
+  toast(divisions[div].name + ' results revealed!');
   renderAdminResults();
 }
+
+async function hideDivisionResults(div) {
+  await apiPost('/api/admin/reveal', { division: div, revealed: false });
+  divisionRevealStatus[div] = false;
+  toast(divisions[div].name + ' results hidden.');
+  renderAdminResults();
+}
+
+
 
 function exportExcel() {
   if (typeof XLSX === 'undefined') {
@@ -930,6 +1071,57 @@ async function resetWeek() {
   toast('New week started!');
   renderAdminSubmissions();
   renderAdminResults();
+}
+
+function setAdminChallengeDiv(div) {
+  adminChallengeDiv = div;
+  document.querySelectorAll('#adminChallengeDivTabs .div-tab').forEach(function(b) { b.classList.remove('active'); });
+  if (window.event && window.event.target) window.event.target.classList.add('active');
+  renderAdminChallenges();
+}
+
+function renderAdminChallenges() {
+  const container = $('adminChallengeList');
+  if (!container) return;
+  const div = adminChallengeDiv;
+  const divColor = divisions[div].color;
+  const allChals = getChallengeSubs().filter(function(c) { return c.challengeDivision === div || (c.tags && c.tags.indexOf(div) !== -1); });
+  const ranked = allChals.map(function(s) { return Object.assign({}, s, { avg: getAverageScore(s.id) }); }).filter(function(s) { return s.avg !== null; }).sort(function(a, b) { return b.avg - a.avg; });
+  const img = challengeImages[currentWeekId] ? challengeImages[currentWeekId][div] : null;
+
+  let html = '<div style="margin-bottom:16px;">';
+  html += '<h2 style="color:' + divColor + ';font-size:18px;margin-bottom:10px;">' + divisions[div].name + ' Challenge</h2>';
+  if (img) html += '<img src="' + img + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:14px;">';
+
+  if (allChals.length === 0) {
+    html += '<p style="font-size:13px;color:rgba(255,255,255,0.4);">No challenge entries for this division yet.</p>';
+  } else if (ranked.length > 0) {
+    html += '<div style="background:rgba(0,0,0,0.15);padding:10px;border-radius:8px;margin-bottom:12px;">' +
+      '<p style="font-size:12px;color:rgba(255,255,255,0.5);margin:0;">' + ranked.length + ' of ' + allChals.length + ' entries scored · Leader: <b style="color:var(--brand-gold);">' + ranked[0].title + '</b> (' + ranked[0].avg + '%)</p></div>';
+    html += ranked.map(function(sub, idx) {
+      return '<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;border-left:3px solid ' + divColor + ';">' +
+        '<div style="display:flex;align-items:center;gap:12px;">' +
+        '<div style="font-weight:800;color:' + (idx < 3 ? 'var(--brand-gold)' : 'rgba(255,255,255,0.4)') + ';width:28px;">#' + (idx + 1) + '</div>' +
+        (sub.image ? '<img src="' + sub.image + '" style="width:40px;height:40px;object-fit:cover;border-radius:6px;">' : '') +
+        '<div><div style="font-weight:700;font-size:14px;color:white;">' + sub.title + '</div><div style="font-size:12px;color:rgba(255,255,255,0.5);">by ' + sub.author + '</div></div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+        '<div style="font-weight:800;font-size:16px;color:var(--brand-gold);">' + sub.avg + '%</div>' +
+        '<a href="' + sub.link + '" target="_blank" style="padding:4px 10px;background:var(--brand-gold);color:#1a1a2e;text-decoration:none;font-weight:700;border-radius:4px;font-size:11px;">Play</a>' +
+        '</div></div>';
+    }).join('');
+  } else {
+    html += '<p style="font-size:13px;color:rgba(255,255,255,0.4);">Entries submitted but not yet scored by judges.</p>';
+    html += allChals.map(function(sub) {
+      return '<div class="card" style="border-left:4px solid ' + divColor + ';margin-bottom:10px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<div><div style="font-weight:700;font-size:16px;">' + sub.title + '</div><div style="font-size:13px;color:rgba(255,255,255,0.6);">by ' + sub.author + '</div></div>' +
+        '<a href="' + sub.link + '" target="_blank" style="padding:6px 12px;background:var(--brand-gold);color:#1a1a2e;text-decoration:none;font-weight:700;border-radius:6px;font-size:12px;">Play</a>' +
+        '</div></div>';
+    }).join('');
+  }
+  html += '</div>';
+  container.innerHTML = html;
 }
 
 function renderAdminSettings() {
