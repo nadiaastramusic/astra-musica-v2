@@ -62,6 +62,7 @@
   </style>
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
 </head>
 <body class="main-page">
   <div class="app-container">
@@ -166,6 +167,7 @@
       <div class="tabs">
         <button class="tab active" onclick="setPublicTab('top20')" id="tabTop20">Top 20</button>
         <button class="tab" onclick="setPublicTab('challenges')" id="tabChallenges">Challenges</button>
+        <button class="tab" onclick="setPublicTab('news')" id="tabNews">📰 News</button>
         <button class="tab" onclick="setPublicTab('results')" id="tabResults">Final Results</button>
       </div>
 
@@ -217,6 +219,11 @@
           <div id="resultsList"></div>
         </div>
       </div>
+
+      <div id="publicNews" class="hidden">
+        <p style="font-size: 14px; color: rgba(255, 255, 255, 0.5); margin-bottom: 16px;">Latest updates from Astra Musica.</p>
+        <div id="publicNewsList"></div>
+      </div>
     </div>
 
     <!-- Admin Panel Screen -->
@@ -225,6 +232,7 @@
       <div class="tabs">
         <button class="tab active" onclick="setAdminTab('submissions')" id="tabAdminSubmissions">Submissions</button>
         <button class="tab" onclick="setAdminTab('judges')" id="tabAdminJudges">Judges</button>
+        <button class="tab" onclick="setAdminTab('news')" id="tabAdminNews">📰 News</button>
         <button class="tab" onclick="setAdminTab('results')" id="tabAdminResults">Results</button>
         <button class="tab" onclick="setAdminTab('settings')" id="tabAdminSettings">Settings</button>
       </div>
@@ -330,6 +338,29 @@
             <tbody id="judgesTable"></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- News Tab -->
+      <div id="adminNews" class="hidden">
+        <div class="card" style="border: 2px solid var(--brand-gold); margin-bottom: 20px;">
+          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--brand-gold);">➕ Publish News Article</h3>
+          <div class="manual-form">
+            <div class="form-group full"><label for="newsTitle">Headline</label><input type="text" id="newsTitle" placeholder="e.g. Week 33 Results Are In!"></div>
+            <div class="form-group full">
+              <label for="newsImage">Cover Image (optional)</label>
+              <input type="file" id="newsImage" accept="image/*">
+              <img id="newsImagePreview" class="img-upload-preview hidden" style="display: none; max-width: 120px; border-radius: 8px; margin-top: 8px;" alt="Preview">
+            </div>
+            <div class="form-group full">
+              <label for="newsContent">Article Content</label>
+              <textarea id="newsContent" rows="6" placeholder="Write your article here..." style="width:100%;padding:10px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:white;font-size:14px;line-height:1.5;resize:vertical;"></textarea>
+            </div>
+            <div class="form-group full">
+              <button class="btn btn-gold" onclick="addNews()">📰 Publish Article</button>
+            </div>
+          </div>
+        </div>
+        <div id="adminNewsList"></div>
       </div>
 
       <!-- Results Tab -->

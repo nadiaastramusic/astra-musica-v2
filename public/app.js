@@ -34,6 +34,9 @@ let teamMembers = [];
 let emailEnabled = false;
 let editingScores = {};
 let mainLogoUrl = '';
+let news = [];
+let submissionLikes = {};
+let editingJudgeId = null;
 
 // ===================== UTILS =====================
 function $(id) { return document.getElementById(id); }
@@ -163,6 +166,8 @@ async function loadData() {
   divisionLogos = allData.divisionLogos || {};
   teamMembers = allData.teamMembers || [];
   emailEnabled = !!allData.emailEnabled;
+  news = allData.news || [];
+  submissionLikes = allData.submissionLikes || {};
   judges = await apiGet('/api/judges');
   if (allData.mainLogo) mainLogoUrl = allData.mainLogo;
   renderMainLogo();
@@ -452,8 +457,8 @@ function setPublicTab(tab) {
   document.querySelectorAll('#screenPublic .tab').forEach(function(t) { t.classList.remove('active'); });
   const activeTabBtn = $('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
   if (activeTabBtn) activeTabBtn.classList.add('active');
-  hide('publicTop20'); hide('publicChallenges'); hide('publicResults');
-  show('public' + (tab === 'top20' ? 'Top20' : tab === 'challenges' ? 'Challenges' : 'Results'));
+  hide('publicTop20'); hide('publicChallenges'); hide('publicResults'); hide('publicNews');
+  show('public' + (tab === 'top20' ? 'Top20' : tab === 'challenges' ? 'Challenges' : tab === 'news' ? 'News' : 'Results'));
   if (publicDivFilter === 'all') {
     setBodyClass('main-page');
   } else {
@@ -462,6 +467,7 @@ function setPublicTab(tab) {
   if (tab === 'top20') renderTop20();
   if (tab === 'challenges') renderChallenges();
   if (tab === 'results') renderResults();
+  if (tab === 'news') renderPublicNews();
 }
 
 function setPublicDiv(div) {
@@ -499,7 +505,11 @@ function renderTop20() {
     if (div === 'gospelpraise' && publicGospelSubTab !== 'all') {
       divSubs = allDivSubs.filter(function(s) { return s.tags && s.tags.indexOf(publicGospelSubTab) !== -1; });
     }
-    divSubs = divSubs.slice(0, 20);
+    if (div === 'gospelpraise' && publicGospelSubTab === 'gospel') {
+      divSubs = divSubs.slice(0, 10);
+    } else {
+      divSubs = divSubs.slice(0, 20);
+    }
     if (allDivSubs.length === 0) return;
     const divColor = divisions[div].color;
     const divLogo = divisionLogos[div];
@@ -539,7 +549,7 @@ function renderTop20() {
           (sub.image ? '<img src="' + sub.image + '" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">' : '') +
           '<div><a href="' + sub.link + '" target="_blank" style="font-weight:700;font-size:15px;color:white;text-decoration:none;">' + sub.title + '</a><div style="font-size:13px;color:rgba(255,255,255,0.6);">by ' + sub.author + '</div></div>' +
           '</div>' +
-          '<div style="text-align:right;"><div style="font-weight:800;font-size:18px;color:var(--brand-gold);">' + (sub.avg !== null ? sub.avg + '%' : 'Pending') + '</div></div>' +
+          '<div style="text-align:right;"><button onclick="likeSubmission(' + sub.id + ')" style="background:none;border:none;cursor:pointer;font-size:22px;padding:4px;">❤️</button><div style="font-size:12px;color:rgba(255,255,255,0.5);">' + (submissionLikes[sub.id] || 0) + ' likes</div></div>' +
           '</div>';
       }).join('');
     }
@@ -635,12 +645,13 @@ function setAdminTab(tab) {
   document.querySelectorAll('#screenAdmin .tab').forEach(function(t) { t.classList.remove('active'); });
   const tabBtn = $('tabAdmin' + tab.charAt(0).toUpperCase() + tab.slice(1));
   if (tabBtn) tabBtn.classList.add('active');
-  hide('adminSubmissions'); hide('adminJudges'); hide('adminResults'); hide('adminSettings');
+  hide('adminSubmissions'); hide('adminJudges'); hide('adminResults'); hide('adminSettings'); hide('adminNews');
   show('admin' + tab.charAt(0).toUpperCase() + tab.slice(1));
   if (tab === 'submissions') renderAdminSubmissions();
   if (tab === 'judges') renderAdminJudges();
   if (tab === 'results') renderAdminResults();
   if (tab === 'settings') renderAdminSettings();
+  if (tab === 'news') renderAdminNews();
 }
 
 function updateDivisionOptions() {
@@ -745,6 +756,27 @@ async function renderAdminJudges() {
     const id = entry[0], j = entry[1];
     const scoreCount = Object.values(scores).filter(function(s) { return s[j.name]; }).length;
     const totalSubs = getSubsForDivision(j.division).length;
+    if (editingJudgeId === id) {
+      return '<tr id="judge-row-' + id + '">' +
+        '<td style="padding:10px;"><input type="text" id="edit-name-' + id + '" value="' + j.name + '" style="width:100%;padding:6px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:white;font-size:13px;"></td>' +
+        '<td style="padding:10px;"><input type="email" id="edit-email-' + id + '" value="' + j.email + '" style="width:100%;padding:6px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:white;font-size:13px;"></td>' +
+        '<td style="padding:10px;">' +
+          '<select id="edit-div-' + id + '" style="padding:6px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:white;font-size:13px;">' +
+            '<option value="english" ' + (j.division === 'english' ? 'selected' : '') + '>English</option>' +
+            '<option value="afrikaans" ' + (j.division === 'afrikaans' ? 'selected' : '') + '>Afrikaans</option>' +
+            '<option value="gospelpraise" ' + (j.division === 'gospelpraise' ? 'selected' : '') + '>Gospel & P&W</option>' +
+            '<option value="liveartists" ' + (j.division === 'liveartists' ? 'selected' : '') + '>Live Artists</option>' +
+          '</select>' +
+        '</td>' +
+        '<td style="padding:10px;color:#6bff6b;">● Active</td>' +
+        '<td style="padding:10px;"><input type="text" id="edit-pw-' + id + '" placeholder="New password" style="width:110px;padding:6px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:white;font-size:12px;"></td>' +
+        '<td style="padding:10px;">' + scoreCount + ' / ' + totalSubs + '</td>' +
+        '<td style="padding:10px;">' +
+          '<button onclick="saveJudgeEdit(\'' + id + '\')" style="background:none;border:none;color:#6bff6b;cursor:pointer;font-size:16px;margin-right:8px;" title="Save">💾</button>' +
+          '<button onclick="cancelJudgeEdit()" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;" title="Cancel">✖</button>' +
+        '</td>' +
+        '</tr>';
+    }
     return '<tr>' +
       '<td style="font-weight:600;padding:10px;">' + j.name + '</td>' +
       '<td style="padding:10px;">' + j.email + '</td>' +
@@ -752,9 +784,42 @@ async function renderAdminJudges() {
       '<td style="padding:10px;color:#6bff6b;">● Active</td>' +
       '<td style="padding:10px;">' + (j.hasSetPassword ? '✓ Changed' : 'Admin Set') + '</td>' +
       '<td style="padding:10px;">' + scoreCount + ' / ' + totalSubs + '</td>' +
-      '<td style="padding:10px;"><button onclick="deleteJudge(\'' + id + '\')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;">🗑️</button></td>' +
+      '<td style="padding:10px;">' +
+        '<button onclick="startEditJudge(\'' + id + '\')" style="background:none;border:none;color:#d4af37;cursor:pointer;font-size:16px;margin-right:8px;" title="Edit">✏️</button>' +
+        '<button onclick="deleteJudge(\'' + id + '\')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;" title="Delete">🗑️</button>' +
+      '</td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="7" style="text-align:center;padding:20px;">No judges configured.</td></tr>';
+}
+
+function startEditJudge(id) {
+  editingJudgeId = id;
+  renderAdminJudges();
+}
+
+function cancelJudgeEdit() {
+  editingJudgeId = null;
+  renderAdminJudges();
+}
+
+async function saveJudgeEdit(id) {
+  const name = $('edit-name-' + id).value.trim();
+  const email = $('edit-email-' + id).value.trim();
+  const division = $('edit-div-' + id).value;
+  const newPw = $('edit-pw-' + id).value.trim();
+  if (!name || !email) { toast('Name and email are required', 'error'); return; }
+  const res = await apiPost('/api/judges/' + id, { name, email, division });
+  if (res.error) { toast(res.error, 'error'); return; }
+  if (newPw && newPw.length >= 4) {
+    const pwRes = await apiPost('/api/admin/reset-judge-password', { judgeId: id, newPassword: newPw });
+    if (pwRes.error) { toast('Info saved, but password reset failed', 'error'); }
+    else { toast('Judge updated and password reset!'); }
+  } else {
+    toast('Judge info updated successfully!');
+  }
+  editingJudgeId = null;
+  await loadData();
+  renderAdminJudges();
 }
 
 async function addJudge() {
@@ -980,6 +1045,112 @@ function setupImagePreviews() {
   bindPreview('challengeImg', 'challengeImgPreview');
   bindPreview('newJudgePhoto', 'newJudgePhotoPreview');
   bindPreview('tmPhoto', 'tmPhotoPreview');
+  bindPreview('newsImage', 'newsImagePreview');
+}
+
+// ===================== NEWS STATION =====================
+
+function renderAdminNews() {
+  const container = $('adminNewsList');
+  if (!container) return;
+  container.innerHTML = news.map(function(a) {
+    return '<div class="card" style="margin-top:12px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">' +
+      '<div style="flex:1;">' +
+      '<h4 style="margin:0 0 6px 0;font-size:16px;color:white;">' + a.title + '</h4>' +
+      '<p style="margin:0 0 8px 0;font-size:12px;color:rgba(255,255,255,0.5);">' + formatDate(a.timestamp) + ' · ' + (a.comments ? a.comments.length : 0) + ' comments · ' + (a.likes || 0) + ' ❤️</p>' +
+      '<p style="margin:0;font-size:13px;color:rgba(255,255,255,0.7);line-height:1.5;">' + a.content.substring(0, 180) + (a.content.length > 180 ? '...' : '') + '</p>' +
+      '</div>' +
+      (a.image ? '<img src="' + a.image + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;flex-shrink:0;">' : '') +
+      '</div>' +
+      '<div style="margin-top:12px;display:flex;gap:8px;">' +
+      '<button onclick="deleteNews(' + a.id + ')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:13px;">🗑️ Delete</button>' +
+      '</div></div>';
+  }).join('') || '<p style="padding:20px;color:rgba(255,255,255,0.4);font-size:13px;">No news articles yet.</p>';
+}
+
+async function addNews() {
+  const title = $('newsTitle').value.trim();
+  const content = $('newsContent').value.trim();
+  const photoInput = $('newsImage');
+  if (!title || !content) { toast('Title and content are required', 'error'); return; }
+  let image = '';
+  if (photoInput && photoInput.files && photoInput.files[0]) {
+    image = await fileToBase64(photoInput.files[0]);
+  }
+  const res = await apiPost('/api/admin/news', { title, content, image });
+  if (res.error) { toast(res.error, 'error'); return; }
+  toast('News article published!');
+  $('newsTitle').value = ''; $('newsContent').value = '';
+  if (photoInput) photoInput.value = '';
+  if ($('newsImagePreview')) $('newsImagePreview').style.display = 'none';
+  await loadData();
+  renderAdminNews();
+}
+
+async function deleteNews(id) {
+  if (!confirm('Delete this news article?')) return;
+  await apiDelete('/api/admin/news/' + id);
+  await loadData();
+  renderAdminNews();
+  toast('Article deleted');
+}
+
+function renderPublicNews() {
+  const container = $('publicNewsList');
+  if (!container) return;
+  container.innerHTML = news.map(function(a) {
+    return '<div class="card" style="margin-top:12px;">' +
+      (a.image ? '<img src="' + a.image + '" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-bottom:12px;">' : '') +
+      '<h3 style="margin:0 0 6px 0;font-size:18px;color:white;">' + a.title + '</h3>' +
+      '<p style="margin:0 0 12px 0;font-size:12px;color:rgba(255,255,255,0.5);">' + formatDate(a.timestamp) + '</p>' +
+      '<p style="margin:0 0 16px 0;font-size:14px;color:rgba(255,255,255,0.8);line-height:1.6;white-space:pre-wrap;">' + a.content + '</p>' +
+      '<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);">' +
+      '<button onclick="likeNews(' + a.id + ')" style="background:none;border:none;cursor:pointer;font-size:18px;color:#ff6b6b;">❤️ ' + (a.likes || 0) + '</button>' +
+      '<span style="font-size:13px;color:rgba(255,255,255,0.5);">💬 ' + (a.comments ? a.comments.length : 0) + ' comments</span>' +
+      '</div>' +
+      '<div style="background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;">' +
+      '<p style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.7);margin:0 0 8px 0;">Comments</p>' +
+      (a.comments && a.comments.length > 0 ? a.comments.map(function(c) {
+        return '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<span style="font-weight:700;font-size:12px;color:var(--brand-gold);">' + c.name + '</span>' +
+          '<span style="font-size:11px;color:rgba(255,255,255,0.4);margin-left:8px;">' + formatDate(c.timestamp) + '</span>' +
+          '<p style="margin:4px 0 0 0;font-size:13px;color:rgba(255,255,255,0.8);">' + c.text + '</p>' +
+          '</div>';
+      }).join('') : '<p style="font-size:12px;color:rgba(255,255,255,0.3);margin:0;">No comments yet.</p>') +
+      '<div style="display:flex;gap:8px;margin-top:10px;">' +
+      '<input type="text" id="news-comment-name-' + a.id + '" placeholder="Your name" style="flex:0 0 100px;padding:6px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:white;font-size:12px;">' +
+      '<input type="text" id="news-comment-text-' + a.id + '" placeholder="Write a comment..." style="flex:1;padding:6px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:white;font-size:12px;">' +
+      '<button onclick="addNewsComment(' + a.id + ')" style="padding:6px 12px;background:var(--brand-gold);color:#1a1a2e;border:none;border-radius:4px;font-weight:700;font-size:12px;cursor:pointer;">Post</button>' +
+      '</div></div></div>';
+  }).join('') || '<p class="text-center text-tertiary" style="padding:40px;">No news articles yet.</p>';
+}
+
+async function addNewsComment(id) {
+  const name = $('news-comment-name-' + id).value.trim();
+  const text = $('news-comment-text-' + id).value.trim();
+  if (!name || !text) { toast('Enter your name and a comment', 'error'); return; }
+  const res = await apiPost('/api/news/' + id + '/comment', { name, text });
+  if (res.error) { toast(res.error, 'error'); return; }
+  toast('Comment posted!');
+  await loadData();
+  renderPublicNews();
+}
+
+async function likeNews(id) {
+  const res = await apiPost('/api/news/' + id + '/like', {});
+  if (res.error) { toast(res.error, 'error'); return; }
+  toast('❤️ Liked!');
+  await loadData();
+  renderPublicNews();
+}
+
+async function likeSubmission(subId) {
+  const res = await apiPost('/api/submissions/' + subId + '/like', {});
+  if (res.error) { toast(res.error, 'error'); return; }
+  toast('❤️ Liked!');
+  await loadData();
+  renderTop20();
 }
 
 // ===================== INITIALIZATION =====================
