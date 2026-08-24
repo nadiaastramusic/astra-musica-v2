@@ -286,9 +286,13 @@ async function notifyJudgesOfSubmission(submission) {
     return;
   }
 
-  const relevantJudges = Object.values(judges).filter(j =>
-    submission.tags.includes(j.division)
-  );
+  const relevantJudges = Object.values(judges).filter(j => {
+    // Handle gospelpraise division which covers both gospel and praiseandworship tags
+    if (j.division === 'gospelpraise') {
+      return submission.tags.includes('gospel') || submission.tags.includes('praiseandworship');
+    }
+    return submission.tags.includes(j.division);
+  });
 
   if (relevantJudges.length === 0) {
     console.log('[EMAIL] No judges found for divisions:', submission.tags);
@@ -535,15 +539,15 @@ app.post('/api/email-test', async (req, res) => {
   if (!emailEnabled) {
     return res.status(400).json({ success: false, error: 'Email not configured' });
   }
-  const { to } = req.body;
-  if (!to) return res.status(400).json({ success: false, error: 'Email address required' });
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ success: false, error: 'Email address required' });
   try {
     await sendBrevoEmail({
-      to,
+      to: email,
       subject: 'Astra Musica — SMTP Test',
       html: '<p>Hi! This is a test email from Astra Musica. If you received this, your Brevo API configuration is working correctly.</p>'
     });
-    console.log(`[EMAIL] Test email sent to ${to}`);
+    console.log(`[EMAIL] Test email sent to ${email}`);
     res.json({ success: true });
   } catch (err) {
     console.error('[EMAIL] Test email failed:', err.response?.data?.message || err.message);
@@ -556,15 +560,15 @@ app.post('/api/admin/test-email', async (req, res) => {
   if (!emailEnabled) {
     return res.status(400).json({ success: false, error: 'Email not configured' });
   }
-  const { to } = req.body;
-  if (!to) return res.status(400).json({ success: false, error: 'Email address required' });
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ success: false, error: 'Email address required' });
   try {
     await sendBrevoEmail({
-      to,
+      to: email,
       subject: 'Astra Musica — SMTP Test',
       html: '<p>Hi! This is a test email from Astra Musica. If you received this, your Brevo API configuration is working correctly.</p>'
     });
-    console.log(`[EMAIL] Test email sent to ${to}`);
+    console.log(`[EMAIL] Test email sent to ${email}`);
     res.json({ success: true });
   } catch (err) {
     console.error('[EMAIL] Test email failed:', err.response?.data?.message || err.message);
