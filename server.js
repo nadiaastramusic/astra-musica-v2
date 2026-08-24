@@ -102,7 +102,10 @@ async function connectDB() {
     return false;
   }
   try {
-    client = new MongoClient(MONGODB_URI);
+    client = new MongoClient(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000
+    });
     await client.connect();
     db = client.db('astra_musica');
     console.log('[DB] Connected to MongoDB Atlas');
