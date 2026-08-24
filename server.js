@@ -384,7 +384,8 @@ app.post('/api/judges', async (req, res) => {
   if (!name || !email || !division || !password) {
     return res.status(400).json({ error: 'Name, email, division, and password are required' });
   }
-  const id = 'judge' + (Object.keys(judges).length + 1);
+  // Use timestamp + random suffix to guarantee unique IDs even after deletions
+  const id = 'judge' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   judges[id] = { name, email, division, password, photo: photo || '', hasSetPassword: false };
   await saveJudges();
   res.json({ id, name, email, division });
