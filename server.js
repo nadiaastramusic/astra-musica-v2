@@ -91,6 +91,8 @@ let currentWeekId = '2026-W33';
 let challengeImages = {};
 let teamMembers = [];
 let nextId = 1;
+let submissionLikes = {};
+let news = [];
 
 // ===================== MONGODB =====================
 let db = null;
@@ -150,6 +152,12 @@ async function loadFromDB() {
 
     const teamDoc = await db.collection('teamMembers').findOne({ _id: 'all' });
     if (teamDoc) teamMembers = teamDoc.data || [];
+
+    const likesDoc = await db.collection('submissionLikes').findOne({ _id: 'all' });
+    if (likesDoc) submissionLikes = likesDoc.data || {};
+
+    const newsDoc = await db.collection('news').findOne({ _id: 'all' });
+    if (newsDoc) news = newsDoc.data || [];
 
     console.log('[DB] Loaded from MongoDB:', {
       judges: Object.keys(judges).length,
@@ -213,6 +221,24 @@ async function saveTeamMembers() {
   await db.collection('teamMembers').updateOne(
     { _id: 'all' },
     { $set: { data: teamMembers } },
+    { upsert: true }
+  );
+}
+
+async function saveSubmissionLikes() {
+  if (!db) return;
+  await db.collection('submissionLikes').updateOne(
+    { _id: 'all' },
+    { $set: { data: submissionLikes } },
+    { upsert: true }
+  );
+}
+
+async function saveNews() {
+  if (!db) return;
+  await db.collection('news').updateOne(
+    { _id: 'all' },
+    { $set: { data: news } },
     { upsert: true }
   );
 }
@@ -514,7 +540,9 @@ app.get('/api/all-data', (req, res) => {
     divisionRevealStatus,
     divisionRevealTimes,
     emailEnabled: emailEnabled,
-    mainLogo: appLogo
+    mainLogo: appLogo,
+    news,
+    submissionLikes
   });
 });
 
@@ -733,6 +761,65 @@ app.post('/api/admin/logo', async (req, res) => {
     );
   }
   res.json({ success: true, url: logoUrl });
+});
+
+// ===================== LIKES & NEWS =====================
+
+// Submission likes
+app.post('/api/submissions/:id/like', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!submissionLikes[id]) submissionLikes[id] = 0;
+  submissionLikes[id]++;
+  await saveSubmissionLikes();
+  res.json({ success: true, likes: submissionLikes[id] });
+});
+
+// News articles
+app.get('/api/news', (req, res) => res.json(news));
+
+app.post('/api/admin/news', async (req, res) => {
+  const { title, content: articleContent, image } = req.body;
+  if (!title || !articleContent) return res.status(400).json({ error: 'Title and content required' });
+  const article = {
+    id: Date.now(),
+    title,
+    content: articleContent,
+    image: image || '',
+    timestamp: new Date().toISOString(),
+    likes: 0,
+    comments: []
+  };
+  news.unshift(article);
+  await saveNews();
+  res.json({ success: true, article });
+});
+
+app.delete('/api/admin/news/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  news = news.filter(a => a.id !== id);
+  await saveNews();
+  res.json({ success: true, news });
+});
+
+app.post('/api/news/:id/like', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const article = news.find(a => a.id === id);
+  if (!article) return res.status(404).json({ error: 'Article not found' });
+  article.likes = (article.likes || 0) + 1;
+  await saveNews();
+  res.json({ success: true, likes: article.likes });
+});
+
+app.post('/api/news/:id/comment', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name, text } = req.body;
+  if (!name || !text) return res.status(400).json({ error: 'Name and text required' });
+  const article = news.find(a => a.id === id);
+  if (!article) return res.status(404).json({ error: 'Article not found' });
+  if (!article.comments) article.comments = [];
+  article.comments.push({ name, text, timestamp: new Date().toISOString() });
+  await saveNews();
+  res.json({ success: true, comments: article.comments });
 });
 
 // Facebook polling
