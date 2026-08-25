@@ -364,10 +364,12 @@ function toggleTeamBio(idx) {
     bioEl.style.maxHeight = '0px';
     bioEl.style.opacity = '0';
     bioEl.style.marginTop = '0';
+    bioEl.style.overflow = 'hidden';
   } else {
-    bioEl.style.maxHeight = '200px';
+    bioEl.style.maxHeight = bioEl.scrollHeight + 'px';
     bioEl.style.opacity = '1';
     bioEl.style.marginTop = '8px';
+    bioEl.style.overflow = 'visible';
   }
 }
 
