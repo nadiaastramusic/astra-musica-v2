@@ -49,6 +49,8 @@ let mainLogoUrl = '';
 let news = [];
 let submissionLikes = {};
 let editingJudgeId = null;
+let editingTeamMemberIndex = null;
+let dragSrcIndex = null;
 
 // ===================== UTILS =====================
 function $(id) { return document.getElementById(id); }
@@ -282,12 +284,15 @@ function renderTeamMembers() {
 
   if (teamMembers.length > 0) {
     if (section) section.style.display = 'block';
-    const cardHtml = teamMembers.map(function(m) {
-      return '<div class="role-card" style="padding:16px;text-align:center;">' +
+    const cardHtml = teamMembers.map(function(m, idx) {
+      return '<div class="role-card team-member-card" onclick="toggleTeamBio(' + idx + ')" style="padding:16px;text-align:center;cursor:pointer;transition:all 0.3s ease;">' +
         '<img src="' + (m.photo || 'https://via.placeholder.com/80') + '" alt="' + m.name + '" style="width:70px;height:70px;object-fit:cover;border-radius:50%;margin:0 auto 12px auto;border:2px solid var(--brand-gold);">' +
         '<h4 style="font-size:16px;font-weight:700;color:white;margin:0 0 4px 0;">' + m.name + '</h4>' +
         '<p style="font-size:13px;color:var(--brand-gold);margin:0 0 8px 0;font-weight:600;">' + m.role + '</p>' +
-        (m.bio ? '<p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0;line-height:1.4;">' + m.bio + '</p>' : '') +
+        '<div id="team-bio-' + idx + '" style="max-height:0;overflow:hidden;transition:max-height 0.4s ease,opacity 0.3s ease, margin 0.3s ease;opacity:0;margin-top:0;">' +
+        '<p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0;line-height:1.4;">' + (m.bio || 'No bio available.') + '</p>' +
+        '</div>' +
+        '<div style="margin-top:8px;font-size:11px;color:var(--brand-gold);opacity:0.7;pointer-events:none;">👆 Click to read bio</div>' +
         '</div>';
     }).join('');
     if (grid) grid.innerHTML = cardHtml;
@@ -297,12 +302,28 @@ function renderTeamMembers() {
 
   if (list) {
     list.innerHTML = teamMembers.map(function(m, idx) {
-      return '<div class="team-card" style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px;background:rgba(255,255,255,0.05);border-radius:10px;margin-bottom:10px;">' +
-        '<div style="display:flex;align-items:center;gap:12px;">' +
+      if (editingTeamMemberIndex === idx) {
+        return '<div class="team-card" style="padding:12px;background:rgba(255,255,255,0.05);border-radius:10px;margin-bottom:10px;border:1px solid var(--brand-gold);">' +
+          '<div style="flex:1;">' +
+          '<div style="margin-bottom:8px;"><input type="text" id="edit-tm-name-' + idx + '" value="' + m.name + '" placeholder="Name" style="width:100%;padding:6px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:white;font-size:13px;"></div>' +
+          '<div style="margin-bottom:8px;"><input type="text" id="edit-tm-role-' + idx + '" value="' + m.role + '" placeholder="Role" style="width:100%;padding:6px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:white;font-size:13px;"></div>' +
+          '<div><input type="text" id="edit-tm-bio-' + idx + '" value="' + (m.bio || '') + '" placeholder="Bio" style="width:100%;padding:6px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:white;font-size:13px;"></div>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;align-items:center;">' +
+          '<button onclick="saveTeamMemberEdit(' + idx + ')" style="background:none;border:none;color:#6bff6b;cursor:pointer;font-size:16px;" title="Save">💾</button>' +
+          '<button onclick="cancelTeamMemberEdit()" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;" title="Cancel">✖</button>' +
+          '</div></div>';
+      }
+      return '<div class="team-card" draggable="true" ondragstart="teamDragStart(event,' + idx + ')" ondragover="teamDragOver(event,' + idx + ')" ondrop="teamDrop(event,' + idx + ')" ondragend="teamDragEnd(event)" style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px;background:rgba(255,255,255,0.05);border-radius:10px;margin-bottom:10px;cursor:move;">' +
+        '<div style="display:flex;align-items:center;gap:12px;flex:1;">' +
+        '<span style="color:rgba(255,255,255,0.3);font-size:16px;user-select:none;">≡</span>' +
         '<img src="' + (m.photo || 'https://via.placeholder.com/50') + '" alt="' + m.name + '" style="width:48px;height:48px;object-fit:cover;border-radius:50%;flex-shrink:0;">' +
         '<div><div style="font-size:15px;font-weight:700;color:white;">' + m.name + ' <span style="font-size:12px;font-weight:400;color:var(--brand-gold);">· ' + m.role + '</span></div>' +
         (m.bio ? '<div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:2px;">' + m.bio + '</div>' : '') + '</div></div>' +
-        '<button onclick="deleteTeamMember(' + idx + ')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;">🗑️</button></div>';
+        '<div style="display:flex;gap:8px;align-items:center;">' +
+        '<button onclick="startEditTeamMember(' + idx + ')" style="background:none;border:none;color:#d4af37;cursor:pointer;font-size:16px;" title="Edit">✏️</button>' +
+        '<button onclick="deleteTeamMember(' + idx + ')" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;" title="Delete">🗑️</button>' +
+        '</div></div>';
     }).join('') || '<p style="font-size:13px;color:rgba(255,255,255,0.4);">No team members added yet.</p>';
   }
 }
@@ -333,6 +354,78 @@ async function deleteTeamMember(index) {
   teamMembers = res.teamMembers || [];
   toast('Team member removed');
   renderTeamMembers();
+}
+
+function toggleTeamBio(idx) {
+  const bioEl = $('team-bio-' + idx);
+  if (!bioEl) return;
+  const isOpen = bioEl.style.maxHeight !== '0px' && bioEl.style.maxHeight !== '';
+  if (isOpen) {
+    bioEl.style.maxHeight = '0px';
+    bioEl.style.opacity = '0';
+    bioEl.style.marginTop = '0';
+  } else {
+    bioEl.style.maxHeight = '200px';
+    bioEl.style.opacity = '1';
+    bioEl.style.marginTop = '8px';
+  }
+}
+
+function startEditTeamMember(idx) {
+  editingTeamMemberIndex = idx;
+  renderTeamMembers();
+}
+
+function cancelTeamMemberEdit() {
+  editingTeamMemberIndex = null;
+  renderTeamMembers();
+}
+
+async function saveTeamMemberEdit(idx) {
+  const name = $('edit-tm-name-' + idx).value.trim();
+  const role = $('edit-tm-role-' + idx).value.trim();
+  const bio = $('edit-tm-bio-' + idx).value.trim();
+  if (!name || !role) { toast('Name and role are required', 'error'); return; }
+  const res = await apiPost('/api/admin/team/' + idx, { name, role, bio });
+  if (res.error) { toast(res.error, 'error'); return; }
+  teamMembers = res.teamMembers || teamMembers;
+  editingTeamMemberIndex = null;
+  renderTeamMembers();
+  toast('Team member updated!');
+}
+
+function teamDragStart(e, idx) {
+  dragSrcIndex = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  e.target.style.opacity = '0.4';
+}
+
+function teamDragOver(e, idx) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function teamDrop(e, idx) {
+  e.stopPropagation();
+  if (dragSrcIndex === null || dragSrcIndex === idx) return;
+  const moved = teamMembers.splice(dragSrcIndex, 1)[0];
+  teamMembers.splice(idx, 0, moved);
+  dragSrcIndex = null;
+  saveTeamOrder();
+}
+
+function teamDragEnd(e) {
+  e.target.style.opacity = '1';
+  dragSrcIndex = null;
+}
+
+async function saveTeamOrder() {
+  const res = await apiPost('/api/admin/team/reorder', { teamMembers: teamMembers });
+  if (res.error) { toast(res.error, 'error'); return; }
+  teamMembers = res.teamMembers || teamMembers;
+  editingTeamMemberIndex = null;
+  renderTeamMembers();
+  toast('Team order updated!');
 }
 
 // ===================== JUDGE =====================

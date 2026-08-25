@@ -635,6 +635,37 @@ app.delete('/api/admin/team/:index', async (req, res) => {
   res.json({ success: true, teamMembers });
 });
 
+// Edit team member by index
+app.post('/api/admin/team/:index', async (req, res) => {
+  const index = parseInt(req.params.index);
+  if (index < 0 || index >= teamMembers.length) {
+    return res.status(404).json({ error: 'Team member not found' });
+  }
+  const { name, role, bio } = req.body;
+  if (!name || !role) {
+    return res.status(400).json({ error: 'Name and role required' });
+  }
+  teamMembers[index] = {
+    ...teamMembers[index],
+    name,
+    role,
+    bio: bio || ''
+  };
+  await saveTeamMembers();
+  res.json({ success: true, teamMembers });
+});
+
+// Reorder team members
+app.post('/api/admin/team/reorder', async (req, res) => {
+  const { teamMembers: newOrder } = req.body;
+  if (!Array.isArray(newOrder)) {
+    return res.status(400).json({ error: 'Array required' });
+  }
+  teamMembers = newOrder;
+  await saveTeamMembers();
+  res.json({ success: true, teamMembers });
+});
+
 app.post('/api/team-members/replace', async (req, res) => {
   const { members } = req.body;
   if (!Array.isArray(members)) return res.status(400).json({ error: 'Members array required' });
