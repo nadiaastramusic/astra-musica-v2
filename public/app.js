@@ -21,12 +21,6 @@ function downloadExcel(weekId) {
 }
 
 // ===================== IMPORTS & SETUP =====================
-const path = require('path');
-const axios = require('axios');
-const { MongoClient } = require('mongodb');
-
-const app = express();
-
 // CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
