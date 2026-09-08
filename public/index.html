@@ -4,13 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Astra Musica — Competition Platform</title>
+
+  <!-- External Stylesheets & Base -->
   <link rel="stylesheet" href="style.css">
+  <base target="_blank">
+
   <!-- SheetJS for Excel Export Functionality -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <base target="_blank">
+
   <style>
     /* Backdrop layer system — logos persist as CSS background-images */
-    .screen { position: relative; overflow: hidden; min-height: 100vh; }
+    .screen { 
+      position: relative; 
+      overflow: hidden; 
+      min-height: 100vh; 
+    }
+    
     .screen-backdrop {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -22,45 +31,48 @@
       z-index: 0;
       transition: opacity 0.4s ease, background-image 0.3s ease;
     }
+
     .screen-backdrop.active {
       opacity: 0.12;
       background-size: 45% auto;
     }
+
     .screen-backdrop.main-logo {
       opacity: 0.14;
       background-size: 55% auto;
     }
-    /* Soft red gradient for English division */
+
+    /* Division Background Gradients */
     body.div-english {
       background: linear-gradient(160deg, #1a1a2e 0%, #2e1a1a 30%, #1f0f0f 60%, #1a1a2e 100%);
       background-attachment: fixed;
     }
-    /* Soft green gradient for Afrikaans division */
+
     body.div-afrikaans {
       background: linear-gradient(160deg, #1a1a2e 0%, #1a2e1a 30%, #0f1f0f 60%, #1a1a2e 100%);
       background-attachment: fixed;
     }
-    /* Soft purple gradient for Gospel & Praise & Worship division */
+
     body.div-gospelpraise {
       background: linear-gradient(160deg, #1a1a2e 0%, #241538 30%, #1f0f2e 60%, #1a1a2e 100%);
       background-attachment: fixed;
     }
-    /* Soft teal gradient for Live Artists division */
+
     body.div-liveartists {
       background: linear-gradient(160deg, #1a1a2e 0%, #1a2e2e 30%, #0f1f1f 60%, #1a1a2e 100%);
       background-attachment: fixed;
     }
+
     .screen > *:not(.screen-backdrop) {
       position: relative;
       z-index: 1;
     }
-    /* Ensure header stays above backdrops */
+
     .header {
       position: relative;
       z-index: 2;
     }
   </style>
-<base target="_blank">
 </head>
 <body class="main-page">
   <div class="app-container">
@@ -154,7 +166,6 @@
         <button class="tab" onclick="setJudgeTab('challenge')" id="tabJudgeChallenge">Challenge</button>
         <button class="tab" onclick="setJudgeTab('themes')" id="tabJudgeThemes">🎭 Themes</button>
       </div>
-      <!-- Gospel / Praise & Worship sub-tabs for judges -->
       <div id="judgeGospelPraiseTabs" style="display: none; margin-bottom: 16px; gap: 10px;"></div>
       <div id="judgeSubmissions"></div>
     </div>
@@ -340,7 +351,15 @@
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Name</th><th>Email</th><th>Division</th><th>Status</th><th>Password</th><th>Scores</th><th>Action</th></tr>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Division</th>
+                <th>Status</th>
+                <th>Password</th>
+                <th>Scores</th>
+                <th>Action</th>
+              </tr>
             </thead>
             <tbody id="judgesTable"></tbody>
           </table>
