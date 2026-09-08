@@ -63,6 +63,7 @@
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
 </head>
 <body class="main-page">
   <div class="app-container">
@@ -168,6 +169,7 @@
         <button class="tab active" onclick="setPublicTab('top20')" id="tabTop20">Top 20</button>
         <button class="tab" onclick="setPublicTab('challenges')" id="tabChallenges">Challenges</button>
         <button class="tab" onclick="setPublicTab('news')" id="tabNews">📰 News</button>
+        <button class="tab" onclick="setPublicTab('themes')" id="tabThemes">🎭 Themes</button>
         <button class="tab" onclick="setPublicTab('results')" id="tabResults">Final Results</button>
       </div>
 
@@ -218,6 +220,11 @@
           </div>
           <div id="resultsList"></div>
         </div>
+      </div>
+
+      <div id="publicThemes" class="hidden">
+        <p style="font-size: 14px; color: rgba(255, 255, 255, 0.5); margin-bottom: 16px;">Theme of the Month — Monthly competition entries.</p>
+        <div id="publicThemesList"></div>
       </div>
 
       <div id="publicNews" class="hidden">
@@ -391,6 +398,11 @@
         </div>
       </div>
 
+      <!-- Themes Tab -->
+      <div id="adminThemes" class="hidden">
+        <div id="adminThemesList"></div>
+      </div>
+
       <!-- Settings Tab -->
       <div id="adminSettings" class="hidden">
         <div class="card" style="max-width: 500px; border: 2px solid var(--brand-gold);">
@@ -415,6 +427,12 @@
           <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px; color: #ff6b6b;">⚠️ Reset Week</h3>
           <p style="font-size: 13px; color: rgba(255, 255, 255, 0.5); margin-bottom: 16px;">This will delete ALL submissions and scores and start a fresh week. This action cannot be undone.</p>
           <button class="btn btn-danger" onclick="resetWeek()">Reset for New Week</button>
+        </div>
+
+        <div class="card mt-2" style="max-width: 500px; border: 2px solid #ff9500;">
+          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px; color: #ff9500;">🎭 Delete Theme Data Only</h3>
+          <p style="font-size: 13px; color: rgba(255, 255, 255, 0.5); margin-bottom: 16px;">This will delete ONLY theme submissions and scores. Top 20 and Challenge data will be preserved.</p>
+          <button class="btn btn-danger" onclick="deleteThemeDataOnly()" style="background: #ff9500;">Delete Theme Data Only</button>
         </div>
 
         <div class="card mt-2" style="max-width: 500px;">

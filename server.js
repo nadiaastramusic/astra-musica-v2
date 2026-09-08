@@ -15,6 +15,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// Performance: cache static assets and API responses
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    res.header('Cache-Control', 'no-cache');
+  }
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -93,6 +101,12 @@ let teamMembers = [];
 let nextId = 1;
 let submissionLikes = {};
 let news = [];
+let themes = [];
+let themeScores = {};
+let themeImages = {};
+let themeRevealStatus = false;
+let themeRevealTime = new Date().getTime() + 30 * 24 * 60 * 60 * 1000; // Default ~30 days from now
+let nextThemeId = 1;
 
 // ===================== MONGODB =====================
 let db = null;
@@ -158,6 +172,22 @@ async function loadFromDB() {
 
     const newsDoc = await db.collection('news').findOne({ _id: 'all' });
     if (newsDoc) news = newsDoc.data || [];
+
+    const themesDoc = await db.collection('themes').findOne({ _id: 'all' });
+    if (themesDoc) themes = themesDoc.data || [];
+
+    const themeScoresDoc = await db.collection('themeScores').findOne({ _id: 'all' });
+    if (themeScoresDoc) themeScores = themeScoresDoc.data || {};
+
+    const themeImagesDoc = await db.collection('themeImages').findOne({ _id: 'all' });
+    if (themeImagesDoc) themeImages = themeImagesDoc.data || {};
+
+    const themeSettingsDoc = await db.collection('settings').findOne({ _id: 'theme' });
+    if (themeSettingsDoc) {
+      themeRevealStatus = themeSettingsDoc.revealed || false;
+      themeRevealTime = themeSettingsDoc.revealTime || themeRevealTime;
+      nextThemeId = themeSettingsDoc.nextId || 1;
+    }
 
     console.log('[DB] Loaded from MongoDB:', {
       judges: Object.keys(judges).length,
@@ -243,6 +273,33 @@ async function saveNews() {
   );
 }
 
+async function saveThemes() {
+  if (!db) return;
+  await db.collection('themes').updateOne(
+    { _id: 'all' },
+    { $set: { data: themes } },
+    { upsert: true }
+  );
+}
+
+async function saveThemeScores() {
+  if (!db) return;
+  await db.collection('themeScores').updateOne(
+    { _id: 'all' },
+    { $set: { data: themeScores } },
+    { upsert: true }
+  );
+}
+
+async function saveThemeImages() {
+  if (!db) return;
+  await db.collection('themeImages').updateOne(
+    { _id: 'all' },
+    { $set: { data: themeImages } },
+    { upsert: true }
+  );
+}
+
 async function saveChallengeImages() {
   if (!db) return;
   await db.collection('challengeImages').updateOne(
@@ -294,6 +351,43 @@ function getChallengeSubs(weekId = currentWeekId) {
 
 function getSubsForDivision(div, weekId = currentWeekId) {
   return submissions.filter(s => s.weekId === weekId && s.tags.includes(div) && s.entryType === 'top20');
+}
+
+function getNextRevealTime() {
+  const now = new Date();
+  const day = now.getDay();
+  const daysUntilSat = (6 - day + 7) % 7;
+  const nextSat = new Date(now);
+  nextSat.setDate(now.getDate() + daysUntilSat);
+  nextSat.setHours(16, 0, 0, 0);
+  if (nextSat <= now) nextSat.setDate(nextSat.getDate() + 7);
+  return nextSat.getTime();
+}
+
+function getNextClearTime() {
+  const now = new Date();
+  const day = now.getDay();
+  const daysUntilSun = (0 - day + 7) % 7;
+  const nextSun = new Date(now);
+  nextSun.setDate(now.getDate() + daysUntilSun);
+  nextSun.setHours(18, 0, 0, 0);
+  if (nextSun <= now) nextSun.setDate(nextSun.getDate() + 7);
+  return nextSun.getTime();
+}
+
+function getThemeAverageScore(subId) {
+  const subScores = themeScores[subId];
+  if (!subScores) return null;
+  const all = Object.values(subScores).map(s => s.total);
+  if (all.length === 0) return null;
+  return Math.round(all.reduce((a, b) => a + b, 0) / all.length);
+}
+
+function getThemeRankings() {
+  return themes
+    .map(s => ({ ...s, avg: getThemeAverageScore(s.id) }))
+    .filter(s => s.avg !== null)
+    .sort((a, b) => b.avg - a.avg);
 }
 
 function getWeekId() {
@@ -542,7 +636,14 @@ app.get('/api/all-data', (req, res) => {
     emailEnabled: emailEnabled,
     mainLogo: appLogo,
     news,
-    submissionLikes
+    submissionLikes,
+    themes,
+    themeScores,
+    themeImages,
+    themeRevealStatus,
+    themeRevealTime,
+    nextRevealTime: getNextRevealTime(),
+    nextClearTime: getNextClearTime()
   });
 });
 
@@ -851,6 +952,177 @@ app.post('/api/news/:id/comment', async (req, res) => {
   article.comments.push({ name, text, timestamp: new Date().toISOString() });
   await saveNews();
   res.json({ success: true, comments: article.comments });
+});
+
+// ===================== THEMES =====================
+
+app.get('/api/themes', (req, res) => res.json(themes));
+
+app.post('/api/themes', async (req, res) => {
+  const { author, title, tags, link, image } = req.body;
+  if (!author || !title || !link) return res.status(400).json({ error: 'Missing fields' });
+  const theme = {
+    id: nextThemeId++,
+    author, title, tags: tags || [], link,
+    image: image || null,
+    timestamp: new Date().toISOString()
+  };
+  themes.push(theme);
+  await saveThemes();
+  await db.collection('settings').updateOne(
+    { _id: 'theme' },
+    { $set: { nextId: nextThemeId, revealed: themeRevealStatus, revealTime: themeRevealTime } },
+    { upsert: true }
+  );
+  res.json(theme);
+});
+
+app.delete('/api/themes/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  themes = themes.filter(t => t.id !== id);
+  delete themeScores[id];
+  await saveThemes();
+  await saveThemeScores();
+  res.json({ success: true });
+});
+
+app.post('/api/theme-scores', async (req, res) => {
+  const { submissionId, judgeName, criteria } = req.body;
+  const total = calculatePercentage(criteria);
+  if (!themeScores[submissionId]) themeScores[submissionId] = {};
+  themeScores[submissionId][judgeName] = { criteria, total };
+  await saveThemeScores();
+  res.json({ success: true, total });
+});
+
+app.get('/api/theme-scores', (req, res) => res.json(themeScores));
+
+app.post('/api/admin/theme-image', async (req, res) => {
+  const { image } = req.body;
+  themeImages = { banner: image };
+  await saveThemeImages();
+  res.json({ success: true });
+});
+
+app.post('/api/admin/theme-reveal', async (req, res) => {
+  const { revealed } = req.body;
+  themeRevealStatus = !!revealed;
+  await db.collection('settings').updateOne(
+    { _id: 'theme' },
+    { $set: { revealed: themeRevealStatus, revealTime: themeRevealTime, nextId: nextThemeId } },
+    { upsert: true }
+  );
+  res.json({ success: true, revealed: themeRevealStatus });
+});
+
+app.post('/api/admin/theme-reveal-time', async (req, res) => {
+  const { timestamp } = req.body;
+  themeRevealTime = parseInt(timestamp);
+  await db.collection('settings').updateOne(
+    { _id: 'theme' },
+    { $set: { revealed: themeRevealStatus, revealTime: themeRevealTime, nextId: nextThemeId } },
+    { upsert: true }
+  );
+  res.json({ success: true });
+});
+
+// ===================== COPY TEXT FOR AI IMAGE GENERATION =====================
+
+app.get('/api/copy-text/:type/:division', (req, res) => {
+  const { type, division } = req.params;
+  const divName = divisions[division]?.name || division;
+  let text = '';
+  let entries = [];
+
+  if (type === 'top20') {
+    entries = getRankings().filter(s => s.tags && s.tags.includes(division));
+    text = `╔══════════════════════════════════════════════════╗
+`;
+    text += `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║
+`;
+    text += `║           TOP 20 RESULTS                         ║
+`;
+    text += `║              Week ${currentWeekId.padEnd(33)}║
+`;
+    text += `╚══════════════════════════════════════════════════╝
+
+`;
+  } else if (type === 'challenge') {
+    entries = getChallengeRankings(division);
+    text = `╔══════════════════════════════════════════════════╗
+`;
+    text += `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║
+`;
+    text += `║         WEEKLY CHALLENGE RESULTS                 ║
+`;
+    text += `║              Week ${currentWeekId.padEnd(33)}║
+`;
+    text += `╚══════════════════════════════════════════════════╝
+
+`;
+  } else if (type === 'theme') {
+    entries = getThemeRankings();
+    text = `╔══════════════════════════════════════════════════╗
+`;
+    text += `║     ASTRA MUSICA — THEME OF THE MONTH            ║
+`;
+    text += `║         MONTHLY COMPETITION RESULTS              ║
+`;
+    text += `╚══════════════════════════════════════════════════╝
+
+`;
+  }
+
+  if (entries.length === 0) {
+    text += 'No entries scored yet.
+';
+  } else {
+    entries.slice(0, 3).forEach((sub, idx) => {
+      const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
+      const place = idx === 0 ? '1st Place' : idx === 1 ? '2nd Place' : '3rd Place';
+      text += `${medal} ${place}
+`;
+      text += `"${sub.title}"
+`;
+      text += `by ${sub.author}
+`;
+      text += `Score: ${sub.avg}%
+
+`;
+    });
+    if (entries.length > 3) {
+      text += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+';
+      entries.slice(3).forEach((sub, idx) => {
+        text += `${idx + 4}. "${sub.title}" by ${sub.author} — ${sub.avg}%
+`;
+      });
+    }
+  }
+
+  text += '
+🏆 Astra Musica — Where Stars Are Born
+';
+  res.json({ text });
+});
+
+// ===================== DELETE THEME ONLY =====================
+
+app.post('/api/admin/delete-theme-only', async (req, res) => {
+  themes = [];
+  themeScores = {};
+  themeImages = {};
+  themeRevealStatus = false;
+  nextThemeId = 1;
+  await saveThemes();
+  await saveThemeScores();
+  await saveThemeImages();
+  await db.collection('settings').updateOne(
+    { _id: 'theme' },
+    { $set: { revealed: false, revealTime: themeRevealTime, nextId: 1 } },
+    { upsert: true }
+  );
+  res.json({ success: true, message: 'Theme data cleared. Top 20 and Challenge data preserved.' });
 });
 
 // Facebook polling
