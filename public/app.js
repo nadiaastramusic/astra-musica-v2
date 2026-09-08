@@ -1100,9 +1100,9 @@ app.get('/api/copy-text/:type/:division', (req, res) => {
     }
   }
 
-  text += '
+  text += `
 🏆 Astra Musica — Where Stars Are Born
-';
+`;
   res.json({ text });
 });
 
