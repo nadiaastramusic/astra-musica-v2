@@ -407,7 +407,6 @@ async function notifyJudgesOfSubmission(submission) {
   }
 
   const relevantJudges = Object.values(judges).filter(j => {
-    // Handle gospelpraise division which covers both gospel and praiseandworship tags
     if (j.division === 'gospelpraise') {
       return submission.tags.includes('gospel') || submission.tags.includes('praiseandworship');
     }
@@ -511,7 +510,6 @@ app.post('/api/judges', async (req, res) => {
   if (!name || !email || !division || !password) {
     return res.status(400).json({ error: 'Name, email, division, and password are required' });
   }
-  // Use timestamp + random suffix to guarantee unique IDs even after deletions
   const id = 'judge' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   judges[id] = { name, email, division, password, photo: photo || '', hasSetPassword: false };
   await saveJudges();
@@ -663,7 +661,7 @@ app.get('/api/email-status', (req, res) => {
   });
 });
 
-// Test email endpoint (frontend calls /api/admin/test-email)
+// Test email endpoint
 app.post('/api/email-test', async (req, res) => {
   if (!emailEnabled) {
     return res.status(400).json({ success: false, error: 'Email not configured' });
@@ -736,7 +734,6 @@ app.delete('/api/admin/team/:index', async (req, res) => {
   res.json({ success: true, teamMembers });
 });
 
-// Edit team member by index
 app.post('/api/admin/team/:index', async (req, res) => {
   const index = parseInt(req.params.index);
   if (index < 0 || index >= teamMembers.length) {
@@ -756,7 +753,6 @@ app.post('/api/admin/team/:index', async (req, res) => {
   res.json({ success: true, teamMembers });
 });
 
-// Reorder team members
 app.post('/api/admin/team/reorder', async (req, res) => {
   const { teamMembers: newOrder } = req.body;
   if (!Array.isArray(newOrder)) {
@@ -792,7 +788,6 @@ app.post('/api/division-logos', async (req, res) => {
   res.json({ success: true, divisionLogos });
 });
 
-// Alias for frontend compatibility
 app.post('/api/admin/division-logos', async (req, res) => {
   const { division, logoUrl } = req.body;
   if (!division || !logoUrl) return res.status(400).json({ error: 'Division and URL required' });
@@ -881,7 +876,6 @@ app.post('/api/logo', async (req, res) => {
   res.json({ success: true, url });
 });
 
-// Alias for frontend compatibility
 app.post('/api/admin/logo', async (req, res) => {
   const { logoUrl } = req.body;
   appLogo = logoUrl;
@@ -897,7 +891,6 @@ app.post('/api/admin/logo', async (req, res) => {
 
 // ===================== LIKES & NEWS =====================
 
-// Submission likes
 app.post('/api/submissions/:id/like', async (req, res) => {
   const id = parseInt(req.params.id);
   if (!submissionLikes[id]) submissionLikes[id] = 0;
@@ -906,7 +899,6 @@ app.post('/api/submissions/:id/like', async (req, res) => {
   res.json({ success: true, likes: submissionLikes[id] });
 });
 
-// News articles
 app.get('/api/news', (req, res) => res.json(news));
 
 app.post('/api/admin/news', async (req, res) => {
@@ -1036,73 +1028,43 @@ app.get('/api/copy-text/:type/:division', (req, res) => {
 
   if (type === 'top20') {
     entries = getRankings().filter(s => s.tags && s.tags.includes(division));
-    text = `╔══════════════════════════════════════════════════╗
-`;
-    text += `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║
-`;
-    text += `║           TOP 20 RESULTS                         ║
-`;
-    text += `║              Week ${currentWeekId.padEnd(33)}║
-`;
-    text += `╚══════════════════════════════════════════════════╝
-
-`;
+    text = `╔══════════════════════════════════════════════════╗\n` +
+           `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║\n` +
+           `║           TOP 20 RESULTS                         ║\n` +
+           `║              Week ${currentWeekId.padEnd(33)}║\n` +
+           `╚══════════════════════════════════════════════════╝\n\n`;
   } else if (type === 'challenge') {
     entries = getChallengeRankings(division);
-    text = `╔══════════════════════════════════════════════════╗
-`;
-    text += `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║
-`;
-    text += `║         WEEKLY CHALLENGE RESULTS                 ║
-`;
-    text += `║              Week ${currentWeekId.padEnd(33)}║
-`;
-    text += `╚══════════════════════════════════════════════════╝
-
-`;
+    text = `╔══════════════════════════════════════════════════╗\n` +
+           `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║\n` +
+           `║         WEEKLY CHALLENGE RESULTS                 ║\n` +
+           `║              Week ${currentWeekId.padEnd(33)}║\n` +
+           `╚══════════════════════════════════════════════════╝\n\n`;
   } else if (type === 'theme') {
     entries = getThemeRankings();
-    text = `╔══════════════════════════════════════════════════╗
-`;
-    text += `║     ASTRA MUSICA — THEME OF THE MONTH            ║
-`;
-    text += `║         MONTHLY COMPETITION RESULTS              ║
-`;
-    text += `╚══════════════════════════════════════════════════╝
-
-`;
+    text = `╔══════════════════════════════════════════════════╗\n` +
+           `║     ASTRA MUSICA — THEME OF THE MONTH            ║\n` +
+           `║         MONTHLY COMPETITION RESULTS              ║\n` +
+           `╚══════════════════════════════════════════════════╝\n\n`;
   }
 
   if (entries.length === 0) {
-    text += `No entries scored yet.
-`;
+    text += `No entries scored yet.\n`;
   } else {
     entries.slice(0, 3).forEach((sub, idx) => {
       const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
       const place = idx === 0 ? '1st Place' : idx === 1 ? '2nd Place' : '3rd Place';
-      text += `${medal} ${place}
-`;
-      text += `"${sub.title}"
-`;
-      text += `by ${sub.author}
-`;
-      text += `Score: ${sub.avg}%
-
-`;
+      text += `${medal} ${place}\n"${sub.title}"\nby ${sub.author}\nScore: ${sub.avg}%\n\n`;
     });
     if (entries.length > 3) {
-      text += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-';
+      text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
       entries.slice(3).forEach((sub, idx) => {
-        text += `${idx + 4}. "${sub.title}" by ${sub.author} — ${sub.avg}%
-`;
+        text += `${idx + 4}. "${sub.title}" by ${sub.author} — ${sub.avg}%\n`;
       });
     }
   }
 
-  text += '
-🏆 Astra Musica — Where Stars Are Born
-';
+  text += `\n🏆 Astra Musica — Where Stars Are Born\n`;
   res.json({ text });
 });
 
