@@ -1,3 +1,26 @@
+// ===================== FRONTEND CLIENT (public/app.js) =====================
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('Astra Musica frontend loaded');
+  loadData();
+});
+
+// Fetch base state from server
+async function loadData() {
+  try {
+    const response = await fetch('/api/all-data');
+    const data = await response.json();
+    console.log('Server state:', data);
+    // Add your UI rendering logic here
+  } catch (err) {
+    console.error('Failed to load initial data:', err);
+  }
+}
+
+// Function to trigger Excel file export via the server
+function downloadExcel(weekId) {
+  window.location.href = `/api/export/${weekId}`;
+}
+
 // ===================== IMPORTS & SETUP =====================
 const express = require('express');
 const path = require('path');

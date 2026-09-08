@@ -1,3 +1,4 @@
+// ===================== IMPORTS & SETUP =====================
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
@@ -11,8 +12,11 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
-  next();
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
 });
 
 // Performance: cache static assets and API responses
@@ -33,7 +37,7 @@ const MONGODB_URI = process.env.MONGODB_URI || '';
 const BASE_URL = process.env.BASE_URL || 'https://astra-musica-v2.onrender.com';
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
 
-// Email config (Brevo REST API)
+// Email config (Brevo REST API — uses HTTPS, bypasses Render SMTP blocks)
 const SMTP_FROM = process.env.SMTP_FROM || 'astra-musica@notifications.com';
 const BREVO_API_KEY = process.env.SMTP_PASS || '';
 
@@ -107,6 +111,7 @@ let themeImages = {};
 let themeRevealStatus = false;
 let themeRevealTime = new Date().getTime() + 30 * 24 * 60 * 60 * 1000;
 let nextThemeId = 1;
+let lastWeeklyReset = 0;
 
 // ===================== MONGODB =====================
 let db = null;
@@ -114,7 +119,7 @@ let client = null;
 
 async function connectDB() {
   if (!MONGODB_URI) {
-    console.log('[DB] No MONGODB_URI set — running in memory-only mode');
+    console.log('[DB] No MONGODB_URI set — running in memory-only mode (data will reset on sleep)');
     return false;
   }
   try {
@@ -128,6 +133,7 @@ async function connectDB() {
     return true;
   } catch (err) {
     console.error('[DB] MongoDB connection failed:', err.message);
+    console.log('[DB] Falling back to memory-only mode');
     return false;
   }
 }
@@ -142,6 +148,7 @@ async function loadFromDB() {
       revealTime = settings.revealTime || revealTime;
       currentWeekId = settings.currentWeekId || currentWeekId;
       nextId = settings.nextId || 1;
+      lastWeeklyReset = settings.lastWeeklyReset || 0;
       if (settings.divisionRevealStatus) divisionRevealStatus = { ...divisionRevealStatus, ...settings.divisionRevealStatus };
       if (settings.divisionRevealTimes) divisionRevealTimes = { ...divisionRevealTimes, ...settings.divisionRevealTimes };
     }
@@ -192,7 +199,8 @@ async function loadFromDB() {
       judges: Object.keys(judges).length,
       submissions: submissions.length,
       scores: Object.keys(scores).length,
-      week: currentWeekId
+      week: currentWeekId,
+      divisionLogos: Object.keys(divisionLogos).length
     });
   } catch (err) {
     console.error('[DB] Load error:', err.message);
@@ -203,7 +211,16 @@ async function saveSettings() {
   if (!db) return;
   await db.collection('settings').updateOne(
     { _id: 'main' },
-    { $set: { adminPassword, resultsRevealed, revealTime, currentWeekId, nextId, divisionRevealStatus, divisionRevealTimes } },
+    { $set: { adminPassword, resultsRevealed, revealTime, currentWeekId, nextId, divisionRevealStatus, divisionRevealTimes, lastWeeklyReset } },
+    { upsert: true }
+  );
+}
+
+async function saveThemeSettings() {
+  if (!db) return;
+  await db.collection('settings').updateOne(
+    { _id: 'theme' },
+    { $set: { revealed: themeRevealStatus, revealTime: themeRevealTime, nextId: nextThemeId } },
     { upsert: true }
   );
 }
@@ -347,10 +364,6 @@ function getChallengeSubs(weekId = currentWeekId) {
   });
 }
 
-function getSubsForDivision(div, weekId = currentWeekId) {
-  return submissions.filter(s => s.weekId === weekId && s.tags.includes(div) && s.entryType === 'top20');
-}
-
 function getNextRevealTime() {
   const now = new Date();
   const day = now.getDay();
@@ -371,6 +384,17 @@ function getNextClearTime() {
   nextSun.setHours(18, 0, 0, 0);
   if (nextSun <= now) nextSun.setDate(nextSun.getDate() + 7);
   return nextSun.getTime();
+}
+
+function getLastClearTime() {
+  const now = new Date();
+  const day = now.getDay();
+  const daysSinceSun = (day + 7) % 7;
+  const sun = new Date(now);
+  sun.setDate(now.getDate() - daysSinceSun);
+  sun.setHours(18, 0, 0, 0);
+  if (sun.getTime() > now.getTime()) sun.setDate(sun.getDate() - 7);
+  return sun.getTime();
 }
 
 function getThemeAverageScore(subId) {
@@ -397,10 +421,49 @@ function getWeekId() {
   return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
+// ===================== AUTOMATIC WEEKLY TIMER =====================
+async function runWeeklyTimer() {
+  try {
+    const now = Date.now();
+    const lastClear = getLastClearTime();
+    if (lastWeeklyReset < lastClear) {
+      currentWeekId = getWeekId();
+      submissions = [];
+      scores = {};
+      nextId = 1;
+      resultsRevealed = false;
+      const nextReveal = getNextRevealTime();
+      for (const d of Object.keys(divisionRevealStatus)) {
+        divisionRevealStatus[d] = false;
+        divisionRevealTimes[d] = nextReveal;
+      }
+      lastWeeklyReset = lastClear;
+      await saveSettings();
+      await saveSubmissions();
+      await saveScores();
+      console.log(`[TIMER] Weekly reset ✓ new week: ${currentWeekId}`);
+    }
+
+    let changed = false;
+    for (const d of Object.keys(divisionRevealStatus)) {
+      if (!divisionRevealStatus[d] && now >= divisionRevealTimes[d]) {
+        divisionRevealStatus[d] = true;
+        changed = true;
+        console.log(`[TIMER] Auto-revealed division: ${d}`);
+      }
+    }
+    if (changed) {
+      resultsRevealed = Object.values(divisionRevealStatus).some(v => v);
+      await saveSettings();
+    }
+  } catch (err) {
+    console.error('[TIMER] Error:', err.message);
+  }
+}
+
 // ===================== NOTIFICATIONS =====================
 async function notifyJudgesOfSubmission(submission) {
   if (!emailEnabled) return;
-
   const relevantJudges = Object.values(judges).filter(j => {
     if (j.division === 'gospelpraise') {
       return submission.tags.includes('gospel') || submission.tags.includes('praiseandworship');
@@ -409,7 +472,6 @@ async function notifyJudgesOfSubmission(submission) {
   });
 
   if (relevantJudges.length === 0) return;
-
   const divNames = submission.tags.map(t => divisions[t]?.name || t).join(', ');
 
   for (const judge of relevantJudges) {
@@ -417,7 +479,27 @@ async function notifyJudgesOfSubmission(submission) {
       await sendBrevoEmail({
         to: judge.email,
         subject: `New Submission in ${divisions[judge.division]?.name || judge.division}`,
-        html: `<p>Hi ${judge.name}, a new song by ${submission.author} was added.</p>`
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#333;">
+            <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:28px;border-radius:12px 12px 0 0;text-align:center;">
+              <h2 style="color:#d4af37;margin:0;font-size:22px;">Astra Musica</h2>
+              <p style="color:rgba(255,255,255,0.7);margin:8px 0 0 0;font-size:14px;">🎵 New Submission Alert</p>
+            </div>
+            <div style="background:#fff;padding:28px;border-radius:0 0 12px 12px;border:1px solid #e0e0e0;border-top:none;">
+              <p style="font-size:15px;margin-bottom:16px;">Hi <b>${judge.name}</b>,</p>
+              <p style="font-size:14px;line-height:1.6;">A new song has been submitted to your division and is ready for scoring.</p>
+              <div style="background:#f8f9fa;padding:16px;border-radius:8px;margin:20px 0;border-left:4px solid #d4af37;">
+                <p style="margin:0 0 8px 0;font-size:14px;"><b>Artist:</b> ${submission.author}</p>
+                <p style="margin:0 0 8px 0;font-size:14px;"><b>Title:</b> ${submission.title}</p>
+                <p style="margin:0 0 8px 0;font-size:14px;"><b>Division:</b> ${divNames}</p>
+                <p style="margin:0;font-size:14px;"><b>Week:</b> ${submission.weekId}</p>
+              </div>
+              <div style="text-align:center;margin:28px 0;padding:20px;background:#faf8f0;border-radius:10px;border:1px solid #e8e0c8;">
+                <a href="${BASE_URL}" style="background:#d4af37;color:#1a1a2e;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:800;font-size:15px;display:inline-block;">Open Astra Musica →</a>
+              </div>
+            </div>
+          </div>
+        `
       });
     } catch (err) {
       console.error(`[EMAIL] Failed to notify ${judge.email}:`, err.message);
@@ -428,6 +510,7 @@ async function notifyJudgesOfSubmission(submission) {
 // ===================== API ROUTES =====================
 app.get('/api/divisions', (req, res) => res.json(divisions));
 app.get('/api/submissions', (req, res) => res.json(submissions));
+
 app.post('/api/submissions', async (req, res) => {
   const { author, title, tags, link, linkType, entryType, challengeDivision, image, weekId } = req.body;
   if (!author || !title || !tags || !link) return res.status(400).json({ error: 'Missing fields' });
@@ -440,7 +523,7 @@ app.post('/api/submissions', async (req, res) => {
   submissions.push(sub);
   await saveSubmissions();
   await saveSettings();
-  notifyJudgesOfSubmission(sub).catch(err => console.error(err));
+  notifyJudgesOfSubmission(sub).catch(err => console.error('[EMAIL] Notification error:', err));
   res.json(sub);
 });
 
@@ -463,7 +546,9 @@ app.get('/api/judges', (req, res) => {
 
 app.post('/api/judges', async (req, res) => {
   const { name, email, division, password, photo } = req.body;
-  if (!name || !email || !division || !password) return res.status(400).json({ error: 'Required fields missing' });
+  if (!name || !email || !division || !password) {
+    return res.status(400).json({ error: 'Name, email, division, and password are required' });
+  }
   const id = 'judge' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   judges[id] = { name, email, division, password, photo: photo || '', hasSetPassword: false };
   await saveJudges();
@@ -520,102 +605,55 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
-app.post('/api/admin/change-password', async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
-  if (oldPassword !== adminPassword) return res.status(401).json({ error: 'Incorrect current password' });
-  adminPassword = newPassword;
-  await saveSettings();
-  res.json({ success: true });
-});
-
-app.post('/api/admin/reveal', async (req, res) => {
-  const { division, revealed } = req.body;
-  if (division && divisionRevealStatus.hasOwnProperty(division)) {
-    divisionRevealStatus[division] = !!revealed;
-    resultsRevealed = Object.values(divisionRevealStatus).some(v => v);
-  } else {
-    resultsRevealed = !!revealed;
-    Object.keys(divisionRevealStatus).forEach(d => divisionRevealStatus[d] = resultsRevealed);
-  }
-  await saveSettings();
-  res.json({ divisionRevealStatus, resultsRevealed });
-});
-
-app.get('/api/status', (req, res) => res.json({ resultsRevealed, revealTime, currentWeekId }));
-app.get('/api/rankings', (req, res) => res.json(getRankings()));
-
 app.get('/api/all-data', (req, res) => {
   const safeJudges = {};
   for (const [k, v] of Object.entries(judges)) {
     safeJudges[k] = { name: v.name, email: v.email, division: v.division, hasSetPassword: v.hasSetPassword };
   }
   res.json({
-    weekId: currentWeekId, resultsRevealed, revealTime, divisions, judges: safeJudges,
-    submissions, scores, rankings: getRankings(), challengeSubs: getChallengeSubs(),
-    challengeImages, divisionLogos, teamMembers, divisionRevealStatus, divisionRevealTimes,
-    emailEnabled, mainLogo: appLogo, news, submissionLikes, themes, themeScores, themeImages,
-    themeRevealStatus, themeRevealTime, nextRevealTime: getNextRevealTime(), nextClearTime: getNextClearTime()
+    weekId: currentWeekId,
+    resultsRevealed,
+    revealTime,
+    divisions,
+    judges: safeJudges,
+    submissions,
+    scores,
+    rankings: getRankings(),
+    challengeSubs: getChallengeSubs(),
+    challengeImages,
+    divisionLogos,
+    teamMembers,
+    divisionRevealStatus,
+    divisionRevealTimes,
+    emailEnabled,
+    mainLogo: appLogo,
+    news,
+    submissionLikes,
+    themes,
+    themeScores,
+    themeImages,
+    themeRevealStatus,
+    themeRevealTime,
+    nextRevealTime: getNextRevealTime(),
+    nextClearTime: getNextClearTime()
   });
 });
 
-app.get('/api/challenge-rankings/:division', (req, res) => {
-  res.json(getChallengeRankings(req.params.division));
-});
-
-app.get('/api/email-status', (req, res) => {
-  res.json({ enabled: emailEnabled, provider: 'Brevo API', from: SMTP_FROM });
-});
-
-app.post('/api/email-test', async (req, res) => {
-  if (!emailEnabled) return res.status(400).json({ success: false, error: 'Email not configured' });
-  try {
-    await sendBrevoEmail({ to: req.body.email, subject: 'Test', html: '<p>Test</p>' });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.get('/api/team-members', (req, res) => res.json(teamMembers));
-app.post('/api/team-members', async (req, res) => {
-  const { name, role, bio, photo } = req.body;
-  const member = { id: 'tm' + (teamMembers.length + 1), name, role, bio: bio || '', photo: photo || '' };
-  teamMembers.push(member);
-  await saveTeamMembers();
-  res.json({ success: true, member });
-});
-
-app.delete('/api/admin/team/:index', async (req, res) => {
-  const index = parseInt(req.params.index);
-  if (index >= 0 && index < teamMembers.length) {
-    teamMembers.splice(index, 1);
-    await saveTeamMembers();
-  }
-  res.json({ success: true, teamMembers });
-});
-
-app.get('/api/division-logos', (req, res) => res.json(divisionLogos));
-app.post('/api/division-logos', async (req, res) => {
-  const { division, url } = req.body;
-  divisionLogos[division] = url;
-  await saveDivisionLogos();
-  res.json({ success: true, divisionLogos });
-});
-
-app.post('/api/admin/reset-week', async (req, res) => {
-  currentWeekId = req.body.newWeekId || getWeekId();
-  submissions = []; scores = {}; nextId = 1; resultsRevealed = false;
-  await saveSettings(); await saveSubmissions(); await saveScores();
-  res.json({ weekId: currentWeekId });
-});
-
+// Excel export endpoint
 app.get('/api/export/:weekId', (req, res) => {
   const weekId = req.params.weekId;
   const weekSubs = submissions.filter(s => s.weekId === weekId);
   const data = weekSubs.map(s => ({
-    'Week': s.weekId, 'Artist': s.author, 'Title': s.title, 'Division': s.tags.join(', '),
-    'Entry Type': s.entryType, 'Challenge Division': s.challengeDivision || '',
-    'Average Score': getAverageScore(s.id) || 'Not scored', 'Date': new Date(s.timestamp).toLocaleDateString()
+    'Week': s.weekId,
+    'Artist': s.author,
+    'Title': s.title,
+    'Division': s.tags.join(', '),
+    'Entry Type': s.entryType,
+    'Challenge Division': s.challengeDivision || '',
+    'Link': s.link,
+    'Link Type': s.linkType,
+    'Average Score': getAverageScore(s.id) || 'Not scored',
+    'Date': new Date(s.timestamp).toLocaleDateString()
   }));
 
   const ws = XLSX.utils.json_to_sheet(data);
@@ -627,30 +665,17 @@ app.get('/api/export/:weekId', (req, res) => {
   res.send(buf);
 });
 
-// Facebook polling
-async function pollFacebook() {
-  if (!FB_PAGE_ID || !FB_ACCESS_TOKEN) return;
-  try {
-    const url = `https://graph.facebook.com/v18.0/${FB_PAGE_ID}/posts?access_token=${FB_ACCESS_TOKEN}&fields=message,permalink_url,created_time`;
-    await axios.get(url);
-  } catch (err) {
-    console.error('[FB] Poll error:', err.message);
-  }
-}
-
 // ===================== STARTUP =====================
 async function start() {
   const dbConnected = await connectDB();
   if (dbConnected) await loadFromDB();
   await setupEmail();
-  pollFacebook();
-  setInterval(pollFacebook, POLL_INTERVAL_MS);
+  await runWeeklyTimer();
+  setInterval(runWeeklyTimer, 60 * 1000);
 
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
-    console.log(`Astra Musica v2 running on port ${PORT}`);
-    console.log(`Database: ${dbConnected ? 'MongoDB Atlas ✓' : 'Memory-only'}`);
-    console.log(`Week: ${currentWeekId}`);
+    console.log(`Server running on port ${PORT}`);
   });
 }
 
