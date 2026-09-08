@@ -1,4 +1,3 @@
-// ===================== FRONTEND CLIENT (public/app.js) =====================
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Astra Musica frontend loaded');
   loadData();
@@ -25,7 +24,6 @@ function downloadExcel(weekId) {
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
-const XLSX = require('xlsx');
 const { MongoClient } = require('mongodb');
 
 const app = express();
@@ -36,7 +34,7 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
+    res.sendStatus(204);
   } else {
     next();
   }
