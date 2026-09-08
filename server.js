@@ -33,7 +33,7 @@ const MONGODB_URI = process.env.MONGODB_URI || '';
 const BASE_URL = process.env.BASE_URL || 'https://astra-musica-v2.onrender.com';
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
 
-// Email config (Brevo REST API — uses HTTPS, bypasses Render SMTP blocks)
+// Email config (Brevo REST API)
 const SMTP_FROM = process.env.SMTP_FROM || 'astra-musica@notifications.com';
 const BREVO_API_KEY = process.env.SMTP_PASS || '';
 
@@ -105,7 +105,7 @@ let themes = [];
 let themeScores = {};
 let themeImages = {};
 let themeRevealStatus = false;
-let themeRevealTime = new Date().getTime() + 30 * 24 * 60 * 60 * 1000; // Default ~30 days from now
+let themeRevealTime = new Date().getTime() + 30 * 24 * 60 * 60 * 1000;
 let nextThemeId = 1;
 
 // ===================== MONGODB =====================
@@ -114,7 +114,7 @@ let client = null;
 
 async function connectDB() {
   if (!MONGODB_URI) {
-    console.log('[DB] No MONGODB_URI set — running in memory-only mode (data will reset on sleep)');
+    console.log('[DB] No MONGODB_URI set — running in memory-only mode');
     return false;
   }
   try {
@@ -128,7 +128,6 @@ async function connectDB() {
     return true;
   } catch (err) {
     console.error('[DB] MongoDB connection failed:', err.message);
-    console.log('[DB] Falling back to memory-only mode');
     return false;
   }
 }
@@ -193,8 +192,7 @@ async function loadFromDB() {
       judges: Object.keys(judges).length,
       submissions: submissions.length,
       scores: Object.keys(scores).length,
-      week: currentWeekId,
-      divisionLogos: Object.keys(divisionLogos).length
+      week: currentWeekId
     });
   } catch (err) {
     console.error('[DB] Load error:', err.message);
@@ -401,10 +399,7 @@ function getWeekId() {
 
 // ===================== NOTIFICATIONS =====================
 async function notifyJudgesOfSubmission(submission) {
-  if (!emailEnabled) {
-    console.log('[EMAIL] Email not enabled — skipping judge notification');
-    return;
-  }
+  if (!emailEnabled) return;
 
   const relevantJudges = Object.values(judges).filter(j => {
     if (j.division === 'gospelpraise') {
@@ -413,10 +408,7 @@ async function notifyJudgesOfSubmission(submission) {
     return submission.tags.includes(j.division);
   });
 
-  if (relevantJudges.length === 0) {
-    console.log('[EMAIL] No judges found for divisions:', submission.tags);
-    return;
-  }
+  if (relevantJudges.length === 0) return;
 
   const divNames = submission.tags.map(t => divisions[t]?.name || t).join(', ');
 
@@ -425,51 +417,17 @@ async function notifyJudgesOfSubmission(submission) {
       await sendBrevoEmail({
         to: judge.email,
         subject: `New Submission in ${divisions[judge.division]?.name || judge.division}`,
-        html: `
-          <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#333;">
-            <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:28px;border-radius:12px 12px 0 0;text-align:center;">
-              <h2 style="color:#d4af37;margin:0;font-size:22px;">Astra Musica</h2>
-              <p style="color:rgba(255,255,255,0.7);margin:8px 0 0 0;font-size:14px;">🎵 New Submission Alert</p>
-            </div>
-            <div style="background:#fff;padding:28px;border-radius:0 0 12px 12px;border:1px solid #e0e0e0;border-top:none;">
-              <p style="font-size:15px;margin-bottom:16px;">Hi <b>${judge.name}</b>,</p>
-              <p style="font-size:14px;line-height:1.6;">A new song has been submitted to your division and is ready for scoring.</p>
-
-              <div style="background:#f8f9fa;padding:16px;border-radius:8px;margin:20px 0;border-left:4px solid #d4af37;">
-                <p style="margin:0 0 8px 0;font-size:14px;"><b>Artist:</b> ${submission.author}</p>
-                <p style="margin:0 0 8px 0;font-size:14px;"><b>Title:</b> ${submission.title}</p>
-                <p style="margin:0 0 8px 0;font-size:14px;"><b>Division:</b> ${divNames}</p>
-                <p style="margin:0;font-size:14px;"><b>Week:</b> ${submission.weekId}</p>
-              </div>
-
-              <div style="text-align:center;margin:28px 0;padding:20px;background:#faf8f0;border-radius:10px;border:1px solid #e8e0c8;">
-                <p style="font-size:13px;color:#666;margin:0 0 12px 0;font-weight:600;">👇 Click below to open Astra Musica and score this song</p>
-                <a href="${BASE_URL}" style="background:#d4af37;color:#1a1a2e;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:800;font-size:15px;display:inline-block;box-shadow:0 4px 12px rgba(212,175,55,0.3);">Open Astra Musica →</a>
-                <p style="font-size:12px;color:#888;margin:12px 0 0 0;word-break:break-all;">
-                  <a href="${BASE_URL}" style="color:#666;text-decoration:underline;">${BASE_URL}</a>
-                </p>
-              </div>
-
-              <p style="font-size:12px;color:#888;margin-top:20px;border-top:1px solid #eee;padding-top:12px;">
-                You received this because you are a judge for the <b>${divisions[judge.division]?.name || judge.division}</b> division on Astra Musica.
-              </p>
-            </div>
-          </div>
-        `
+        html: `<p>Hi ${judge.name}, a new song by ${submission.author} was added.</p>`
       });
-      console.log(`[EMAIL] Notification sent to ${judge.email} for submission #${submission.id}`);
     } catch (err) {
-      console.error(`[EMAIL] Failed to notify ${judge.email}:`, err.response?.data?.message || err.message);
+      console.error(`[EMAIL] Failed to notify ${judge.email}:`, err.message);
     }
   }
 }
 
 // ===================== API ROUTES =====================
-
 app.get('/api/divisions', (req, res) => res.json(divisions));
-
 app.get('/api/submissions', (req, res) => res.json(submissions));
-
 app.post('/api/submissions', async (req, res) => {
   const { author, title, tags, link, linkType, entryType, challengeDivision, image, weekId } = req.body;
   if (!author || !title || !tags || !link) return res.status(400).json({ error: 'Missing fields' });
@@ -482,9 +440,7 @@ app.post('/api/submissions', async (req, res) => {
   submissions.push(sub);
   await saveSubmissions();
   await saveSettings();
-
-  notifyJudgesOfSubmission(sub).catch(err => console.error('[EMAIL] Notification error:', err));
-
+  notifyJudgesOfSubmission(sub).catch(err => console.error(err));
   res.json(sub);
 });
 
@@ -507,9 +463,7 @@ app.get('/api/judges', (req, res) => {
 
 app.post('/api/judges', async (req, res) => {
   const { name, email, division, password, photo } = req.body;
-  if (!name || !email || !division || !password) {
-    return res.status(400).json({ error: 'Name, email, division, and password are required' });
-  }
+  if (!name || !email || !division || !password) return res.status(400).json({ error: 'Required fields missing' });
   const id = 'judge' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   judges[id] = { name, email, division, password, photo: photo || '', hasSetPassword: false };
   await saveJudges();
@@ -525,7 +479,7 @@ app.put('/api/judges/:id', async (req, res) => {
   if (division) judges[id].division = division;
   if (photo !== undefined) judges[id].photo = photo;
   await saveJudges();
-  res.json({ success: true, judge: { name: judges[id].name, email: judges[id].email, division: judges[id].division, photo: judges[id].photo } });
+  res.json({ success: true, judge: judges[id] });
 });
 
 app.delete('/api/judges/:id', async (req, res) => {
@@ -544,16 +498,6 @@ app.post('/api/judges/login', (req, res) => {
   const judge = Object.values(judges).find(j => j.email === email && j.password === password);
   if (!judge) return res.status(401).json({ error: 'Invalid credentials' });
   res.json({ name: judge.name, division: judge.division, email: judge.email });
-});
-
-app.post('/api/judges/set-password', async (req, res) => {
-  const { email, oldPassword, newPassword } = req.body;
-  const judge = Object.values(judges).find(j => j.email === email);
-  if (!judge || judge.password !== oldPassword) return res.status(401).json({ error: 'Invalid' });
-  judge.password = newPassword;
-  judge.hasSetPassword = true;
-  await saveJudges();
-  res.json({ success: true });
 });
 
 app.post('/api/scores', async (req, res) => {
@@ -578,9 +522,7 @@ app.post('/api/admin/login', (req, res) => {
 
 app.post('/api/admin/change-password', async (req, res) => {
   const { oldPassword, newPassword } = req.body;
-  if (oldPassword !== adminPassword) {
-    return res.status(401).json({ error: 'Incorrect current password' });
-  }
+  if (oldPassword !== adminPassword) return res.status(401).json({ error: 'Incorrect current password' });
   adminPassword = newPassword;
   await saveSettings();
   res.json({ success: true });
@@ -599,16 +541,7 @@ app.post('/api/admin/reveal', async (req, res) => {
   res.json({ divisionRevealStatus, resultsRevealed });
 });
 
-app.post('/api/admin/set-reveal-time', async (req, res) => {
-  const { division, timestamp } = req.body;
-  if (!division || !divisionRevealTimes.hasOwnProperty(division)) return res.status(400).json({ error: 'Valid division required' });
-  divisionRevealTimes[division] = parseInt(timestamp);
-  await saveSettings();
-  res.json({ success: true, divisionRevealTimes });
-});
-
 app.get('/api/status', (req, res) => res.json({ resultsRevealed, revealTime, currentWeekId }));
-
 app.get('/api/rankings', (req, res) => res.json(getRankings()));
 
 app.get('/api/all-data', (req, res) => {
@@ -617,31 +550,11 @@ app.get('/api/all-data', (req, res) => {
     safeJudges[k] = { name: v.name, email: v.email, division: v.division, hasSetPassword: v.hasSetPassword };
   }
   res.json({
-    weekId: currentWeekId,
-    resultsRevealed,
-    revealTime,
-    divisions,
-    judges: safeJudges,
-    submissions,
-    scores,
-    rankings: getRankings(),
-    challengeSubs: getChallengeSubs(),
-    challengeImages,
-    divisionLogos,
-    teamMembers,
-    divisionRevealStatus,
-    divisionRevealTimes,
-    emailEnabled: emailEnabled,
-    mainLogo: appLogo,
-    news,
-    submissionLikes,
-    themes,
-    themeScores,
-    themeImages,
-    themeRevealStatus,
-    themeRevealTime,
-    nextRevealTime: getNextRevealTime(),
-    nextClearTime: getNextClearTime()
+    weekId: currentWeekId, resultsRevealed, revealTime, divisions, judges: safeJudges,
+    submissions, scores, rankings: getRankings(), challengeSubs: getChallengeSubs(),
+    challengeImages, divisionLogos, teamMembers, divisionRevealStatus, divisionRevealTimes,
+    emailEnabled, mainLogo: appLogo, news, submissionLikes, themes, themeScores, themeImages,
+    themeRevealStatus, themeRevealTime, nextRevealTime: getNextRevealTime(), nextClearTime: getNextClearTime()
   });
 });
 
@@ -649,80 +562,27 @@ app.get('/api/challenge-rankings/:division', (req, res) => {
   res.json(getChallengeRankings(req.params.division));
 });
 
-// Email status
 app.get('/api/email-status', (req, res) => {
-  res.json({
-    enabled: emailEnabled,
-    provider: 'Brevo API',
-    from: SMTP_FROM,
-    message: emailEnabled
-      ? 'Brevo API is connected. Judges will receive emails on new submissions.'
-      : 'Brevo API key not set or invalid. Set SMTP_PASS to your Brevo API key on Render.'
-  });
+  res.json({ enabled: emailEnabled, provider: 'Brevo API', from: SMTP_FROM });
 });
 
-// Test email endpoint
 app.post('/api/email-test', async (req, res) => {
-  if (!emailEnabled) {
-    return res.status(400).json({ success: false, error: 'Email not configured' });
-  }
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ success: false, error: 'Email address required' });
+  if (!emailEnabled) return res.status(400).json({ success: false, error: 'Email not configured' });
   try {
-    await sendBrevoEmail({
-      to: email,
-      subject: 'Astra Musica — SMTP Test',
-      html: '<p>Hi! This is a test email from Astra Musica. If you received this, your Brevo API configuration is working correctly.</p>'
-    });
-    console.log(`[EMAIL] Test email sent to ${email}`);
+    await sendBrevoEmail({ to: req.body.email, subject: 'Test', html: '<p>Test</p>' });
     res.json({ success: true });
   } catch (err) {
-    console.error('[EMAIL] Test email failed:', err.response?.data?.message || err.message);
-    res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Alias for frontend compatibility
-app.post('/api/admin/test-email', async (req, res) => {
-  if (!emailEnabled) {
-    return res.status(400).json({ success: false, error: 'Email not configured' });
-  }
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ success: false, error: 'Email address required' });
-  try {
-    await sendBrevoEmail({
-      to: email,
-      subject: 'Astra Musica — SMTP Test',
-      html: '<p>Hi! This is a test email from Astra Musica. If you received this, your Brevo API configuration is working correctly.</p>'
-    });
-    console.log(`[EMAIL] Test email sent to ${email}`);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('[EMAIL] Test email failed:', err.response?.data?.message || err.message);
-    res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
-  }
-});
-
-// Team Members
 app.get('/api/team-members', (req, res) => res.json(teamMembers));
-
 app.post('/api/team-members', async (req, res) => {
   const { name, role, bio, photo } = req.body;
-  if (!name || !role) return res.status(400).json({ error: 'Name and role required' });
   const member = { id: 'tm' + (teamMembers.length + 1), name, role, bio: bio || '', photo: photo || '' };
   teamMembers.push(member);
   await saveTeamMembers();
   res.json({ success: true, member });
-});
-
-// Alias for frontend compatibility
-app.post('/api/admin/team', async (req, res) => {
-  const { name, role, bio, photo } = req.body;
-  if (!name || !role) return res.status(400).json({ error: 'Name and role required' });
-  const member = { id: 'tm' + (teamMembers.length + 1), name, role, bio: bio || '', photo: photo || '' };
-  teamMembers.push(member);
-  await saveTeamMembers();
-  res.json({ success: true, teamMembers });
 });
 
 app.delete('/api/admin/team/:index', async (req, res) => {
@@ -734,121 +594,28 @@ app.delete('/api/admin/team/:index', async (req, res) => {
   res.json({ success: true, teamMembers });
 });
 
-app.post('/api/admin/team/:index', async (req, res) => {
-  const index = parseInt(req.params.index);
-  if (index < 0 || index >= teamMembers.length) {
-    return res.status(404).json({ error: 'Team member not found' });
-  }
-  const { name, role, bio } = req.body;
-  if (!name || !role) {
-    return res.status(400).json({ error: 'Name and role required' });
-  }
-  teamMembers[index] = {
-    ...teamMembers[index],
-    name,
-    role,
-    bio: bio || ''
-  };
-  await saveTeamMembers();
-  res.json({ success: true, teamMembers });
-});
-
-app.post('/api/admin/team/reorder', async (req, res) => {
-  const { teamMembers: newOrder } = req.body;
-  if (!Array.isArray(newOrder)) {
-    return res.status(400).json({ error: 'Array required' });
-  }
-  teamMembers = newOrder;
-  await saveTeamMembers();
-  res.json({ success: true, teamMembers });
-});
-
-app.post('/api/team-members/replace', async (req, res) => {
-  const { members } = req.body;
-  if (!Array.isArray(members)) return res.status(400).json({ error: 'Members array required' });
-  teamMembers = members;
-  await saveTeamMembers();
-  res.json({ success: true });
-});
-
-app.delete('/api/team-members/:id', async (req, res) => {
-  teamMembers = teamMembers.filter(m => m.id !== req.params.id);
-  await saveTeamMembers();
-  res.json({ success: true });
-});
-
-// Division Logos
 app.get('/api/division-logos', (req, res) => res.json(divisionLogos));
-
 app.post('/api/division-logos', async (req, res) => {
   const { division, url } = req.body;
-  if (!division || !url) return res.status(400).json({ error: 'Division and URL required' });
   divisionLogos[division] = url;
   await saveDivisionLogos();
   res.json({ success: true, divisionLogos });
 });
 
-app.post('/api/admin/division-logos', async (req, res) => {
-  const { division, logoUrl } = req.body;
-  if (!division || !logoUrl) return res.status(400).json({ error: 'Division and URL required' });
-  divisionLogos[division] = logoUrl;
-  await saveDivisionLogos();
-  res.json({ success: true, divisionLogos });
-});
-
-// WhatsApp notification links
-app.get('/api/notify/whatsapp/:division', (req, res) => {
-  const division = req.params.division;
-  const divJudges = Object.values(judges).filter(j => j.division === division);
-  const links = divJudges.map(j => {
-    return { name: j.name, email: j.email };
-  });
-  res.json({ judges: links });
-});
-
-// Challenge images
-app.post('/api/challenge-image', async (req, res) => {
-  const { weekId, division, image } = req.body;
-  if (!challengeImages[weekId]) challengeImages[weekId] = {};
-  challengeImages[weekId][division] = image;
-  await saveChallengeImages();
-  res.json({ success: true });
-});
-
-app.get('/api/challenge-image/:weekId/:division', (req, res) => {
-  const img = challengeImages[req.params.weekId]?.[req.params.division];
-  res.json({ image: img || null });
-});
-
-// Weekly reset
 app.post('/api/admin/reset-week', async (req, res) => {
-  const { newWeekId } = req.body;
-  currentWeekId = newWeekId || getWeekId();
-  submissions = [];
-  scores = {};
-  nextId = 1;
-  resultsRevealed = false;
-  await saveSettings();
-  await saveSubmissions();
-  await saveScores();
+  currentWeekId = req.body.newWeekId || getWeekId();
+  submissions = []; scores = {}; nextId = 1; resultsRevealed = false;
+  await saveSettings(); await saveSubmissions(); await saveScores();
   res.json({ weekId: currentWeekId });
 });
 
-// Excel export
 app.get('/api/export/:weekId', (req, res) => {
   const weekId = req.params.weekId;
   const weekSubs = submissions.filter(s => s.weekId === weekId);
   const data = weekSubs.map(s => ({
-    'Week': s.weekId,
-    'Artist': s.author,
-    'Title': s.title,
-    'Division': s.tags.join(', '),
-    'Entry Type': s.entryType,
-    'Challenge Division': s.challengeDivision || '',
-    'Link': s.link,
-    'Link Type': s.linkType,
-    'Average Score': getAverageScore(s.id) || 'Not scored',
-    'Date': new Date(s.timestamp).toLocaleDateString()
+    'Week': s.weekId, 'Artist': s.author, 'Title': s.title, 'Division': s.tags.join(', '),
+    'Entry Type': s.entryType, 'Challenge Division': s.challengeDivision || '',
+    'Average Score': getAverageScore(s.id) || 'Not scored', 'Date': new Date(s.timestamp).toLocaleDateString()
   }));
 
   const ws = XLSX.utils.json_to_sheet(data);
@@ -860,263 +627,30 @@ app.get('/api/export/:weekId', (req, res) => {
   res.send(buf);
 });
 
-// Logo endpoints
-app.get('/api/logo', (req, res) => res.json({ url: appLogo }));
-
-app.post('/api/logo', async (req, res) => {
-  const { url } = req.body;
-  appLogo = url;
-  if (db) {
-    await db.collection('settings').updateOne(
-      { _id: 'logo' },
-      { $set: { url } },
-      { upsert: true }
-    );
-  }
-  res.json({ success: true, url });
-});
-
-app.post('/api/admin/logo', async (req, res) => {
-  const { logoUrl } = req.body;
-  appLogo = logoUrl;
-  if (db) {
-    await db.collection('settings').updateOne(
-      { _id: 'logo' },
-      { $set: { url: logoUrl } },
-      { upsert: true }
-    );
-  }
-  res.json({ success: true, url: logoUrl });
-});
-
-// ===================== LIKES & NEWS =====================
-
-app.post('/api/submissions/:id/like', async (req, res) => {
-  const id = parseInt(req.params.id);
-  if (!submissionLikes[id]) submissionLikes[id] = 0;
-  submissionLikes[id]++;
-  await saveSubmissionLikes();
-  res.json({ success: true, likes: submissionLikes[id] });
-});
-
-app.get('/api/news', (req, res) => res.json(news));
-
-app.post('/api/admin/news', async (req, res) => {
-  const { title, content: articleContent, image } = req.body;
-  if (!title || !articleContent) return res.status(400).json({ error: 'Title and content required' });
-  const article = {
-    id: Date.now(),
-    title,
-    content: articleContent,
-    image: image || '',
-    timestamp: new Date().toISOString(),
-    likes: 0,
-    comments: []
-  };
-  news.unshift(article);
-  await saveNews();
-  res.json({ success: true, article });
-});
-
-app.delete('/api/admin/news/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
-  news = news.filter(a => a.id !== id);
-  await saveNews();
-  res.json({ success: true, news });
-});
-
-app.post('/api/news/:id/like', async (req, res) => {
-  const id = parseInt(req.params.id);
-  const article = news.find(a => a.id === id);
-  if (!article) return res.status(404).json({ error: 'Article not found' });
-  article.likes = (article.likes || 0) + 1;
-  await saveNews();
-  res.json({ success: true, likes: article.likes });
-});
-
-app.post('/api/news/:id/comment', async (req, res) => {
-  const id = parseInt(req.params.id);
-  const { name, text } = req.body;
-  if (!name || !text) return res.status(400).json({ error: 'Name and text required' });
-  const article = news.find(a => a.id === id);
-  if (!article) return res.status(404).json({ error: 'Article not found' });
-  if (!article.comments) article.comments = [];
-  article.comments.push({ name, text, timestamp: new Date().toISOString() });
-  await saveNews();
-  res.json({ success: true, comments: article.comments });
-});
-
-// ===================== THEMES =====================
-
-app.get('/api/themes', (req, res) => res.json(themes));
-
-app.post('/api/themes', async (req, res) => {
-  const { author, title, tags, link, image } = req.body;
-  if (!author || !title || !link) return res.status(400).json({ error: 'Missing fields' });
-  const theme = {
-    id: nextThemeId++,
-    author, title, tags: tags || [], link,
-    image: image || null,
-    timestamp: new Date().toISOString()
-  };
-  themes.push(theme);
-  await saveThemes();
-  await db.collection('settings').updateOne(
-    { _id: 'theme' },
-    { $set: { nextId: nextThemeId, revealed: themeRevealStatus, revealTime: themeRevealTime } },
-    { upsert: true }
-  );
-  res.json(theme);
-});
-
-app.delete('/api/themes/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
-  themes = themes.filter(t => t.id !== id);
-  delete themeScores[id];
-  await saveThemes();
-  await saveThemeScores();
-  res.json({ success: true });
-});
-
-app.post('/api/theme-scores', async (req, res) => {
-  const { submissionId, judgeName, criteria } = req.body;
-  const total = calculatePercentage(criteria);
-  if (!themeScores[submissionId]) themeScores[submissionId] = {};
-  themeScores[submissionId][judgeName] = { criteria, total };
-  await saveThemeScores();
-  res.json({ success: true, total });
-});
-
-app.get('/api/theme-scores', (req, res) => res.json(themeScores));
-
-app.post('/api/admin/theme-image', async (req, res) => {
-  const { image } = req.body;
-  themeImages = { banner: image };
-  await saveThemeImages();
-  res.json({ success: true });
-});
-
-app.post('/api/admin/theme-reveal', async (req, res) => {
-  const { revealed } = req.body;
-  themeRevealStatus = !!revealed;
-  await db.collection('settings').updateOne(
-    { _id: 'theme' },
-    { $set: { revealed: themeRevealStatus, revealTime: themeRevealTime, nextId: nextThemeId } },
-    { upsert: true }
-  );
-  res.json({ success: true, revealed: themeRevealStatus });
-});
-
-app.post('/api/admin/theme-reveal-time', async (req, res) => {
-  const { timestamp } = req.body;
-  themeRevealTime = parseInt(timestamp);
-  await db.collection('settings').updateOne(
-    { _id: 'theme' },
-    { $set: { revealed: themeRevealStatus, revealTime: themeRevealTime, nextId: nextThemeId } },
-    { upsert: true }
-  );
-  res.json({ success: true });
-});
-
-// ===================== COPY TEXT FOR AI IMAGE GENERATION =====================
-
-app.get('/api/copy-text/:type/:division', (req, res) => {
-  const { type, division } = req.params;
-  const divName = divisions[division]?.name || division;
-  let text = '';
-  let entries = [];
-
-  if (type === 'top20') {
-    entries = getRankings().filter(s => s.tags && s.tags.includes(division));
-    text = `╔══════════════════════════════════════════════════╗\n` +
-           `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║\n` +
-           `║           TOP 20 RESULTS                         ║\n` +
-           `║              Week ${currentWeekId.padEnd(33)}║\n` +
-           `╚══════════════════════════════════════════════════╝\n\n`;
-  } else if (type === 'challenge') {
-    entries = getChallengeRankings(division);
-    text = `╔══════════════════════════════════════════════════╗\n` +
-           `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║\n` +
-           `║         WEEKLY CHALLENGE RESULTS                 ║\n` +
-           `║              Week ${currentWeekId.padEnd(33)}║\n` +
-           `╚══════════════════════════════════════════════════╝\n\n`;
-  } else if (type === 'theme') {
-    entries = getThemeRankings();
-    text = `╔══════════════════════════════════════════════════╗\n` +
-           `║     ASTRA MUSICA — THEME OF THE MONTH            ║\n` +
-           `║         MONTHLY COMPETITION RESULTS              ║\n` +
-           `╚══════════════════════════════════════════════════╝\n\n`;
-  }
-
-  if (entries.length === 0) {
-    text += `No entries scored yet.\n`;
-  } else {
-    entries.slice(0, 3).forEach((sub, idx) => {
-      const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
-      const place = idx === 0 ? '1st Place' : idx === 1 ? '2nd Place' : '3rd Place';
-      text += `${medal} ${place}\n"${sub.title}"\nby ${sub.author}\nScore: ${sub.avg}%\n\n`;
-    });
-    if (entries.length > 3) {
-      text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      entries.slice(3).forEach((sub, idx) => {
-        text += `${idx + 4}. "${sub.title}" by ${sub.author} — ${sub.avg}%\n`;
-      });
-    }
-  }
-
-  text += `\n🏆 Astra Musica — Where Stars Are Born\n`;
-  res.json({ text });
-});
-
-// ===================== DELETE THEME ONLY =====================
-
-app.post('/api/admin/delete-theme-only', async (req, res) => {
-  themes = [];
-  themeScores = {};
-  themeImages = {};
-  themeRevealStatus = false;
-  nextThemeId = 1;
-  await saveThemes();
-  await saveThemeScores();
-  await saveThemeImages();
-  await db.collection('settings').updateOne(
-    { _id: 'theme' },
-    { $set: { revealed: false, revealTime: themeRevealTime, nextId: 1 } },
-    { upsert: true }
-  );
-  res.json({ success: true, message: 'Theme data cleared. Top 20 and Challenge data preserved.' });
-});
-
 // Facebook polling
 async function pollFacebook() {
   if (!FB_PAGE_ID || !FB_ACCESS_TOKEN) return;
   try {
     const url = `https://graph.facebook.com/v18.0/${FB_PAGE_ID}/posts?access_token=${FB_ACCESS_TOKEN}&fields=message,permalink_url,created_time`;
-    const response = await axios.get(url);
-    console.log(`[FB] Polled ${response.data.data?.length || 0} posts`);
+    await axios.get(url);
   } catch (err) {
-    console.error('[FB] Poll error:', err.response?.data?.error?.message || err.message);
+    console.error('[FB] Poll error:', err.message);
   }
 }
 
 // ===================== STARTUP =====================
 async function start() {
   const dbConnected = await connectDB();
-  if (dbConnected) {
-    await loadFromDB();
-  }
-
+  if (dbConnected) await loadFromDB();
   await setupEmail();
-
   pollFacebook();
   setInterval(pollFacebook, POLL_INTERVAL_MS);
 
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
     console.log(`Astra Musica v2 running on port ${PORT}`);
-    console.log(`Database: ${dbConnected ? 'MongoDB Atlas ✓' : 'Memory-only (data resets on sleep)'}`);
-    console.log(`Week: ${currentWeekId} | FB polling: ${FB_PAGE_ID && FB_ACCESS_TOKEN ? 'ON' : 'OFF'}`);
-    console.log(`Email notifications: ${emailEnabled ? 'ON ✓ (Brevo API)' : 'OFF (set SMTP_PASS to Brevo API key)'}`);
+    console.log(`Database: ${dbConnected ? 'MongoDB Atlas ✓' : 'Memory-only'}`);
+    console.log(`Week: ${currentWeekId}`);
   });
 }
 
