@@ -1,4 +1,14 @@
+// ===================== IMPORTS & SETUP =====================
+const express = require('express');
+const path = require('path');
+const axios = require('axios');
+const XLSX = require('xlsx');
+const { MongoClient } = require('mongodb');
+
+const app = express();
+
 // CORS
+app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
@@ -101,6 +111,7 @@ let themeImages = {};
 let themeRevealStatus = false;
 let themeRevealTime = new Date().getTime() + 30 * 24 * 60 * 60 * 1000; // Default ~30 days from now
 let nextThemeId = 1;
+let lastWeeklyReset = 0; // Timestamp of last automatic Sunday 18:00 reset
 
 // ===================== MONGODB =====================
 let db = null;
@@ -137,6 +148,7 @@ async function loadFromDB() {
       revealTime = settings.revealTime || revealTime;
       currentWeekId = settings.currentWeekId || currentWeekId;
       nextId = settings.nextId || 1;
+      lastWeeklyReset = settings.lastWeeklyReset || 0;
       if (settings.divisionRevealStatus) divisionRevealStatus = { ...divisionRevealStatus, ...settings.divisionRevealStatus };
       if (settings.divisionRevealTimes) divisionRevealTimes = { ...divisionRevealTimes, ...settings.divisionRevealTimes };
     }
@@ -199,7 +211,17 @@ async function saveSettings() {
   if (!db) return;
   await db.collection('settings').updateOne(
     { _id: 'main' },
-    { $set: { adminPassword, resultsRevealed, revealTime, currentWeekId, nextId, divisionRevealStatus, divisionRevealTimes } },
+    { $set: { adminPassword, resultsRevealed, revealTime, currentWeekId, nextId, divisionRevealStatus, divisionRevealTimes, lastWeeklyReset } },
+    { upsert: true }
+  );
+}
+
+// Theme settings are stored separately — MUST be null-safe (memory-only mode has no db)
+async function saveThemeSettings() {
+  if (!db) return;
+  await db.collection('settings').updateOne(
+    { _id: 'theme' },
+    { $set: { revealed: themeRevealStatus, revealTime: themeRevealTime, nextId: nextThemeId } },
     { upsert: true }
   );
 }
@@ -369,6 +391,18 @@ function getNextClearTime() {
   return nextSun.getTime();
 }
 
+// Most recent Sunday 18:00 (used by the automatic weekly reset)
+function getLastClearTime() {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday
+  const daysSinceSun = (day + 7) % 7;
+  const sun = new Date(now);
+  sun.setDate(now.getDate() - daysSinceSun);
+  sun.setHours(18, 0, 0, 0);
+  if (sun.getTime() > now.getTime()) sun.setDate(sun.getDate() - 7);
+  return sun.getTime();
+}
+
 function getThemeAverageScore(subId) {
   const subScores = themeScores[subId];
   if (!subScores) return null;
@@ -391,6 +425,51 @@ function getWeekId() {
   const oneWeek = 604800000;
   const week = Math.ceil(diff / oneWeek);
   return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+// ===================== AUTOMATIC WEEKLY TIMER =====================
+// Sunday 18:00 → clear week, Saturday 16:00 → reveal results.
+// Runs every minute; safe to call repeatedly (idempotent via lastWeeklyReset).
+async function runWeeklyTimer() {
+  try {
+    const now = Date.now();
+
+    // 1) Sunday 18:00 clear
+    const lastClear = getLastClearTime();
+    if (lastWeeklyReset < lastClear) {
+      currentWeekId = getWeekId();
+      submissions = [];
+      scores = {};
+      nextId = 1;
+      resultsRevealed = false;
+      const nextReveal = getNextRevealTime();
+      for (const d of Object.keys(divisionRevealStatus)) {
+        divisionRevealStatus[d] = false;
+        divisionRevealTimes[d] = nextReveal;
+      }
+      lastWeeklyReset = lastClear;
+      await saveSettings();
+      await saveSubmissions();
+      await saveScores();
+      console.log(`[TIMER] Weekly reset ✓ new week: ${currentWeekId} | next reveal: ${new Date(nextReveal).toLocaleString()}`);
+    }
+
+    // 2) Saturday 16:00 reveal (per division, based on each division's reveal time)
+    let changed = false;
+    for (const d of Object.keys(divisionRevealStatus)) {
+      if (!divisionRevealStatus[d] && now >= divisionRevealTimes[d]) {
+        divisionRevealStatus[d] = true;
+        changed = true;
+        console.log(`[TIMER] Auto-revealed division: ${d}`);
+      }
+    }
+    if (changed) {
+      resultsRevealed = Object.values(divisionRevealStatus).some(v => v);
+      await saveSettings();
+    }
+  } catch (err) {
+    console.error('[TIMER] Error:', err.message);
+  }
 }
 
 // ===================== NOTIFICATIONS =====================
@@ -705,7 +784,7 @@ app.get('/api/team-members', (req, res) => res.json(teamMembers));
 app.post('/api/team-members', async (req, res) => {
   const { name, role, bio, photo } = req.body;
   if (!name || !role) return res.status(400).json({ error: 'Name and role required' });
-  const member = { id: 'tm' + (teamMembers.length + 1), name, role, bio: bio || '', photo: photo || '' };
+  const member = { id: 'tm' + (teamMembers.length + 1) + '_' + Date.now(), name, role, bio: bio || '', photo: photo || '' };
   teamMembers.push(member);
   await saveTeamMembers();
   res.json({ success: true, member });
@@ -715,7 +794,7 @@ app.post('/api/team-members', async (req, res) => {
 app.post('/api/admin/team', async (req, res) => {
   const { name, role, bio, photo } = req.body;
   if (!name || !role) return res.status(400).json({ error: 'Name and role required' });
-  const member = { id: 'tm' + (teamMembers.length + 1), name, role, bio: bio || '', photo: photo || '' };
+  const member = { id: 'tm' + (teamMembers.length + 1) + '_' + Date.now(), name, role, bio: bio || '', photo: photo || '' };
   teamMembers.push(member);
   await saveTeamMembers();
   res.json({ success: true, teamMembers });
@@ -819,7 +898,7 @@ app.get('/api/challenge-image/:weekId/:division', (req, res) => {
   res.json({ image: img || null });
 });
 
-// Weekly reset
+// Weekly reset (manual)
 app.post('/api/admin/reset-week', async (req, res) => {
   const { newWeekId } = req.body;
   currentWeekId = newWeekId || getWeekId();
@@ -827,6 +906,11 @@ app.post('/api/admin/reset-week', async (req, res) => {
   scores = {};
   nextId = 1;
   resultsRevealed = false;
+  for (const d of Object.keys(divisionRevealStatus)) {
+    divisionRevealStatus[d] = false;
+    divisionRevealTimes[d] = getNextRevealTime();
+  }
+  lastWeeklyReset = getLastClearTime();
   await saveSettings();
   await saveSubmissions();
   await saveScores();
@@ -963,11 +1047,7 @@ app.post('/api/themes', async (req, res) => {
   };
   themes.push(theme);
   await saveThemes();
-  await db.collection('settings').updateOne(
-    { _id: 'theme' },
-    { $set: { nextId: nextThemeId, revealed: themeRevealStatus, revealTime: themeRevealTime } },
-    { upsert: true }
-  );
+  await saveThemeSettings(); // null-safe — works in memory-only mode too
   res.json(theme);
 });
 
@@ -1001,22 +1081,14 @@ app.post('/api/admin/theme-image', async (req, res) => {
 app.post('/api/admin/theme-reveal', async (req, res) => {
   const { revealed } = req.body;
   themeRevealStatus = !!revealed;
-  await db.collection('settings').updateOne(
-    { _id: 'theme' },
-    { $set: { revealed: themeRevealStatus, revealTime: themeRevealTime, nextId: nextThemeId } },
-    { upsert: true }
-  );
+  await saveThemeSettings(); // null-safe — was a crash before (raw db.collection call)
   res.json({ success: true, revealed: themeRevealStatus });
 });
 
 app.post('/api/admin/theme-reveal-time', async (req, res) => {
   const { timestamp } = req.body;
   themeRevealTime = parseInt(timestamp);
-  await db.collection('settings').updateOne(
-    { _id: 'theme' },
-    { $set: { revealed: themeRevealStatus, revealTime: themeRevealTime, nextId: nextThemeId } },
-    { upsert: true }
-  );
+  await saveThemeSettings();
   res.json({ success: true });
 });
 
@@ -1080,15 +1152,12 @@ app.post('/api/admin/delete-theme-only', async (req, res) => {
   themeScores = {};
   themeImages = {};
   themeRevealStatus = false;
+  themeRevealTime = new Date().getTime() + 30 * 24 * 60 * 60 * 1000;
   nextThemeId = 1;
   await saveThemes();
   await saveThemeScores();
   await saveThemeImages();
-  await db.collection('settings').updateOne(
-    { _id: 'theme' },
-    { $set: { revealed: false, revealTime: themeRevealTime, nextId: 1 } },
-    { upsert: true }
-  );
+  await saveThemeSettings();
   res.json({ success: true, message: 'Theme data cleared. Top 20 and Challenge data preserved.' });
 });
 
@@ -1113,6 +1182,10 @@ async function start() {
 
   await setupEmail();
 
+  // Run the weekly timer immediately, then every minute
+  await runWeeklyTimer();
+  setInterval(runWeeklyTimer, 60 * 1000);
+
   pollFacebook();
   setInterval(pollFacebook, POLL_INTERVAL_MS);
 
@@ -1122,6 +1195,7 @@ async function start() {
     console.log(`Database: ${dbConnected ? 'MongoDB Atlas ✓' : 'Memory-only (data resets on sleep)'}`);
     console.log(`Week: ${currentWeekId} | FB polling: ${FB_PAGE_ID && FB_ACCESS_TOKEN ? 'ON' : 'OFF'}`);
     console.log(`Email notifications: ${emailEnabled ? 'ON ✓ (Brevo API)' : 'OFF (set SMTP_PASS to Brevo API key)'}`);
+    console.log(`Weekly timer: Sunday 18:00 clear → Saturday 16:00 reveal ✓`);
   });
 }
 
