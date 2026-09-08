@@ -31,7 +31,6 @@ function downloadExcel(weekId) {
   } else {
     next();
   }
-});
 
 // Performance: cache static assets and API responses
 app.use((req, res, next) => {
