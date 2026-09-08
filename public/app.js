@@ -1,6 +1,5 @@
 const path = require('path');
 const axios = require('axios');
-const XLSX = require('xlsx');
 const { MongoClient } = require('mongodb');
 
 const app = express();
