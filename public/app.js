@@ -1,4 +1,5 @@
 // CORS
+app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
@@ -1027,73 +1028,46 @@ app.get('/api/copy-text/:type/:division', (req, res) => {
 
   if (type === 'top20') {
     entries = getRankings().filter(s => s.tags && s.tags.includes(division));
-    text = `╔══════════════════════════════════════════════════╗
-`;
-    text += `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║
-`;
-    text += `║           TOP 20 RESULTS                         ║
-`;
-    text += `║              Week ${currentWeekId.padEnd(33)}║
-`;
-    text += `╚══════════════════════════════════════════════════╝
-
-`;
+    text = `╔══════════════════════════════════════════════════╗\n`;
+    text += `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║\n`;
+    text += `║           TOP 20 RESULTS                         ║\n`;
+    text += `║              Week ${currentWeekId.padEnd(33)}║\n`;
+    text += `╚══════════════════════════════════════════════════╝\n\n`;
   } else if (type === 'challenge') {
     entries = getChallengeRankings(division);
-    text = `╔══════════════════════════════════════════════════╗
-`;
-    text += `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║
-`;
-    text += `║         WEEKLY CHALLENGE RESULTS                 ║
-`;
-    text += `║              Week ${currentWeekId.padEnd(33)}║
-`;
-    text += `╚══════════════════════════════════════════════════╝
-
-`;
+    text = `╔══════════════════════════════════════════════════╗\n`;
+    text += `║     ASTRA MUSICA — ${divName.toUpperCase().padEnd(34)}║\n`;
+    text += `║         WEEKLY CHALLENGE RESULTS                 ║\n`;
+    text += `║              Week ${currentWeekId.padEnd(33)}║\n`;
+    text += `╚══════════════════════════════════════════════════╝\n\n`;
   } else if (type === 'theme') {
     entries = getThemeRankings();
-    text = `╔══════════════════════════════════════════════════╗
-`;
-    text += `║     ASTRA MUSICA — THEME OF THE MONTH            ║
-`;
-    text += `║         MONTHLY COMPETITION RESULTS              ║
-`;
-    text += `╚══════════════════════════════════════════════════╝
-
-`;
+    text = `╔══════════════════════════════════════════════════╗\n`;
+    text += `║     ASTRA MUSICA — THEME OF THE MONTH            ║\n`;
+    text += `║         MONTHLY COMPETITION RESULTS              ║\n`;
+    text += `╚══════════════════════════════════════════════════╝\n\n`;
   }
 
   if (entries.length === 0) {
-    text += `No entries scored yet.
-`;
+    text += `No entries scored yet.\n`;
   } else {
     entries.slice(0, 3).forEach((sub, idx) => {
       const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
       const place = idx === 0 ? '1st Place' : idx === 1 ? '2nd Place' : '3rd Place';
-      text += `${medal} ${place}
-`;
-      text += `"${sub.title}"
-`;
-      text += `by ${sub.author}
-`;
-      text += `Score: ${sub.avg}%
-
-`;
+      text += `${medal} ${place}\n`;
+      text += `"${sub.title}"\n`;
+      text += `by ${sub.author}\n`;
+      text += `Score: ${sub.avg}%\n\n`;
     });
     if (entries.length > 3) {
-      text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`;
+      text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
       entries.slice(3).forEach((sub, idx) => {
-        text += `${idx + 4}. "${sub.title}" by ${sub.author} — ${sub.avg}%
-`;
+        text += `${idx + 4}. "${sub.title}" by ${sub.author} — ${sub.avg}%\n`;
       });
     }
   }
 
-  text += `
-🏆 Astra Musica — Where Stars Are Born
-`;
+  text += `\n🏆 Astra Musica — Where Stars Are Born\n`;
   res.json({ text });
 });
 
