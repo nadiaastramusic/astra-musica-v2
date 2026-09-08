@@ -1074,8 +1074,8 @@ app.get('/api/copy-text/:type/:division', (req, res) => {
   }
 
   if (entries.length === 0) {
-    text += `No entries scored yet.
-`;
+    text += 'No entries scored yet.
+';
   } else {
     entries.slice(0, 3).forEach((sub, idx) => {
       const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';

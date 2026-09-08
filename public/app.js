@@ -1091,8 +1091,8 @@ app.get('/api/copy-text/:type/:division', (req, res) => {
 `;
     });
     if (entries.length > 3) {
-      text += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-';
+      text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
       entries.slice(3).forEach((sub, idx) => {
         text += `${idx + 4}. "${sub.title}" by ${sub.author} — ${sub.avg}%
 `;
