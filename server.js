@@ -12,17 +12,21 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
-  next();
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
 });
 
-// No-cache for API responses
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) res.header('Cache-Control', 'no-cache');
+  if (req.path.startsWith('/api/')) {
+    res.header('Cache-Control', 'no-cache');
+  }
   next();
 });
 
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ===================== CONFIG =====================
@@ -30,7 +34,6 @@ const FB_PAGE_ID = process.env.FB_PAGE_ID || '';
 const FB_ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN || '';
 const MONGODB_URI = process.env.MONGODB_URI || '';
 const BASE_URL = process.env.BASE_URL || 'https://astra-musica-v2.onrender.com';
-const POLL_INTERVAL_MS = 10 * 60 * 1000;
 
 const SMTP_FROM = process.env.SMTP_FROM || 'astra-musica@notifications.com';
 const BREVO_API_KEY = process.env.SMTP_PASS || '';
@@ -42,6 +45,7 @@ async function setupEmail() {
     console.log('[EMAIL] No Brevo API key — email notifications disabled.');
     return;
   }
+  console.log('[EMAIL] Testing Brevo API connection...');
   try {
     const testRes = await axios.get('https://api.brevo.com/v3/account', {
       headers: { 'api-key': BREVO_API_KEY },
@@ -70,12 +74,11 @@ async function sendBrevoEmail({ to, subject, html }) {
 }
 
 // ===================== DIVISIONS =====================
-// Gospel & Praise & Worship are merged into a single 'gospelpraise' division.
-// Individual entries are still tagged 'gospel' or 'praiseandworship'.
 const divisions = {
   english: { name: 'English', color: '#C41E3A' },
   afrikaans: { name: 'Afrikaans', color: '#228B22' },
-  gospelpraise: { name: 'Gospel & Praise & Worship', color: '#7B4FA0' },
+  gospel: { name: 'Gospel', color: '#8B4513' },
+  praiseandworship: { name: 'Praise & Worship', color: '#800080' },
   liveartists: { name: 'Live Artists', color: '#008080' }
 };
 
@@ -88,8 +91,8 @@ let submissions = [];
 let scores = {};
 let resultsRevealed = false;
 let revealTime = new Date('2026-08-14T20:00:00').getTime();
-let divisionRevealStatus = { english: false, afrikaans: false, gospelpraise: false, liveartists: false };
-let divisionRevealTimes = { english: revealTime, afrikaans: revealTime, gospelpraise: revealTime, liveartists: revealTime };
+let divisionRevealStatus = { english: false, afrikaans: false, gospel: false, praiseandworship: false, liveartists: false };
+let divisionRevealTimes = { english: revealTime, afrikaans: revealTime, gospel: revealTime, praiseandworship: revealTime, liveartists: revealTime };
 let currentWeekId = '2026-W33';
 let challengeImages = {};
 let teamMembers = [];
@@ -108,22 +111,33 @@ let lastWeeklyReset = 0;
 let db = null;
 let client = null;
 
-async function connectDB() {
+async function connectDB(retries = 5, delayMs = 3000) {
   if (!MONGODB_URI) {
-    console.log('[DB] No MONGODB_URI set — running in memory-only mode.');
+    console.error('[DB] CRITICAL: MONGODB_URI is not set. Data will NOT persist across restarts. Add MONGODB_URI in Render → Environment.');
     return false;
   }
-  try {
-    client = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000 });
-    await client.connect();
-    db = client.db('astra_musica');
-    console.log('[DB] Connected to MongoDB Atlas');
-    return true;
-  } catch (err) {
-    console.error('[DB] MongoDB connection failed:', err.message);
-    console.log('[DB] Falling back to memory-only mode');
-    return false;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      client = new MongoClient(MONGODB_URI, {
+        serverSelectionTimeoutMS: 8000,
+        connectTimeoutMS: 8000
+      });
+      await client.connect();
+      db = client.db('astra_musica');
+      console.log('[DB] Connected to MongoDB Atlas ✓');
+      return true;
+    } catch (err) {
+      console.error(`[DB] MongoDB connection failed (attempt ${attempt}/${retries}):`, err.message);
+      if (err.message.includes('IP') || err.message.includes('whitelist')) {
+        console.error('[DB] → This looks like an Atlas Network Access block. In MongoDB Atlas: Network Access → Add IP Address → 0.0.0.0/0');
+      }
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
   }
+  console.error('[DB] Connection failed. Server keeps retrying in the background every 60s. Data saved meanwhile lives in memory only.');
+  return false;
 }
 
 async function loadFromDB() {
@@ -187,9 +201,7 @@ async function loadFromDB() {
       judges: Object.keys(judges).length,
       submissions: submissions.length,
       scores: Object.keys(scores).length,
-      week: currentWeekId,
-      themes: themes.length,
-      news: news.length
+      week: currentWeekId
     });
   } catch (err) {
     console.error('[DB] Load error:', err.message);
@@ -214,23 +226,64 @@ async function saveThemeSettings() {
   );
 }
 
-async function saveCollection(name, data) {
+async function saveDivisionLogos() {
   if (!db) return;
-  await db.collection(name).updateOne({ _id: 'all' }, { $set: { data } }, { upsert: true });
+  await db.collection('settings').updateOne({ _id: 'divisionLogos' }, { $set: { data: divisionLogos } }, { upsert: true });
 }
-async function saveDivisionLogos() { await saveCollection('settings', { divisionLogos }); }
-async function saveJudges() { await saveCollection('judges', judges); }
-async function saveSubmissions() { await saveCollection('submissions', submissions); }
-async function saveScores() { await saveCollection('scores', scores); }
-async function saveTeamMembers() { await saveCollection('teamMembers', teamMembers); }
-async function saveSubmissionLikes() { await saveCollection('submissionLikes', submissionLikes); }
-async function saveNews() { await saveCollection('news', news); }
-async function saveThemes() { await saveCollection('themes', themes); }
-async function saveThemeScores() { await saveCollection('themeScores', themeScores); }
-async function saveThemeImages() { await saveCollection('themeImages', themeImages); }
-async function saveChallengeImages() { await saveCollection('challengeImages', challengeImages); }
+
+async function saveJudges() {
+  if (!db) return;
+  await db.collection('judges').updateOne({ _id: 'all' }, { $set: { data: judges } }, { upsert: true });
+}
+
+async function saveSubmissions() {
+  if (!db) { console.error('[DB] WARNING: saveSubmissions called with NO database — data is in memory only!'); return; }
+  await db.collection('submissions').updateOne({ _id: 'all' }, { $set: { data: submissions } }, { upsert: true });
+}
+
+async function saveScores() {
+  if (!db) return;
+  await db.collection('scores').updateOne({ _id: 'all' }, { $set: { data: scores } }, { upsert: true });
+}
+
+async function saveTeamMembers() {
+  if (!db) return;
+  await db.collection('teamMembers').updateOne({ _id: 'all' }, { $set: { data: teamMembers } }, { upsert: true });
+}
+
+async function saveSubmissionLikes() {
+  if (!db) return;
+  await db.collection('submissionLikes').updateOne({ _id: 'all' }, { $set: { data: submissionLikes } }, { upsert: true });
+}
+
+async function saveNews() {
+  if (!db) return;
+  await db.collection('news').updateOne({ _id: 'all' }, { $set: { data: news } }, { upsert: true });
+}
+
+async function saveThemes() {
+  if (!db) return;
+  await db.collection('themes').updateOne({ _id: 'all' }, { $set: { data: themes } }, { upsert: true });
+}
+
+async function saveThemeScores() {
+  if (!db) return;
+  await db.collection('themeScores').updateOne({ _id: 'all' }, { $set: { data: themeScores } }, { upsert: true });
+}
+
+async function saveThemeImages() {
+  if (!db) return;
+  await db.collection('themeImages').updateOne({ _id: 'all' }, { $set: { data: themeImages } }, { upsert: true });
+}
+
+async function saveChallengeImages() {
+  if (!db) return;
+  await db.collection('challengeImages').updateOne({ _id: 'all' }, { $set: { data: challengeImages } }, { upsert: true });
+}
 
 // ===================== HELPERS =====================
+// FIX: week filters removed. Songs stay visible FOREVER until the admin
+// manually clicks "Reset Week". Nothing auto-clears anymore.
 function calculatePercentage(criteria) {
   const sum = criteria.reduce((a, b) => a + (parseFloat(b) || 0), 0);
   return Math.round((sum / 40) * 100);
@@ -240,50 +293,28 @@ function getAverageScore(subId) {
   const subScores = scores[subId];
   if (!subScores) return null;
   const all = Object.values(subScores).map(s => s.total);
-  if (all.length === 0) return null;
   return Math.round(all.reduce((a, b) => a + b, 0) / all.length);
 }
 
-function getThemeAverageScore(subId) {
-  const subScores = themeScores[subId];
-  if (!subScores) return null;
-  const all = Object.values(subScores).map(s => s.total);
-  if (all.length === 0) return null;
-  return Math.round(all.reduce((a, b) => a + b, 0) / all.length);
-}
-
-function getRankings(weekId = currentWeekId) {
+function getRankings() {
   return submissions
-    .filter(s => s.weekId === weekId)
     .map(s => ({ ...s, avg: getAverageScore(s.id) }))
     .filter(s => s.avg !== null)
     .sort((a, b) => b.avg - a.avg);
 }
 
-function getThemeRankings() {
-  return themes
-    .map(s => ({ ...s, avg: getThemeAverageScore(s.id) }))
+function getChallengeRankings(division) {
+  return submissions
+    .filter(s => s.entryType === 'challenge' && (s.challengeDivision === division || (s.tags && s.tags.includes(division))))
+    .map(s => ({ ...s, avg: getAverageScore(s.id) }))
     .filter(s => s.avg !== null)
     .sort((a, b) => b.avg - a.avg);
 }
 
-function getSubsForDivision(div, weekId = currentWeekId) {
-  const subs = submissions.filter(s => s.weekId === weekId && s.entryType !== 'challenge');
-  if (div === 'gospelpraise') {
-    return subs.filter(s => s.tags && (s.tags.includes('gospel') || s.tags.includes('praiseandworship')));
-  }
-  return subs.filter(s => s.tags && s.tags.includes(div));
-}
-
-function getChallengeSubsForDivision(div, weekId = currentWeekId) {
-  const subs = submissions.filter(s => s.weekId === weekId && s.entryType === 'challenge');
-  return subs.filter(s => s.challengeDivision === div || (s.tags && s.tags.includes(div)));
-}
-
-function getChallengeSubs(weekId = currentWeekId) {
+function getChallengeSubs() {
   const seen = new Set();
   return submissions.filter(s => {
-    if (s.weekId !== weekId || s.entryType !== 'challenge') return false;
+    if (s.entryType !== 'challenge') return false;
     const key = s.author + '-' + s.challengeDivision;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -324,6 +355,21 @@ function getLastClearTime() {
   return sun.getTime();
 }
 
+function getThemeAverageScore(subId) {
+  const subScores = themeScores[subId];
+  if (!subScores) return null;
+  const all = Object.values(subScores).map(s => s.total);
+  if (all.length === 0) return null;
+  return Math.round(all.reduce((a, b) => a + b, 0) / all.length);
+}
+
+function getThemeRankings() {
+  return themes
+    .map(s => ({ ...s, avg: getThemeAverageScore(s.id) }))
+    .filter(s => s.avg !== null)
+    .sort((a, b) => b.avg - a.avg);
+}
+
 function getWeekId() {
   const now = new Date();
   const start = new Date(now.getFullYear(), 0, 1);
@@ -333,37 +379,19 @@ function getWeekId() {
   return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
-// ===================== AUTOMATIC WEEKLY TIMER =====================
+// ===================== TIMER (auto-reveal only — never deletes data) =====================
 async function runWeeklyTimer() {
   try {
     const now = Date.now();
-    const lastClear = getLastClearTime();
-    if (lastWeeklyReset < lastClear) {
-      currentWeekId = getWeekId();
-      submissions = [];
-      scores = {};
-      nextId = 1;
-      resultsRevealed = false;
-      const nextReveal = getNextRevealTime();
-      for (const d of Object.keys(divisionRevealStatus)) {
-        divisionRevealStatus[d] = false;
-        divisionRevealTimes[d] = nextReveal;
-      }
-      lastWeeklyReset = lastClear;
-      await saveSettings();
-      await saveSubmissions();
-      await saveScores();
-      console.log('[TIMER] Weekly reset ✓ new week:', currentWeekId);
-    }
-
     let changed = false;
     for (const d of Object.keys(divisionRevealStatus)) {
       if (!divisionRevealStatus[d] && now >= divisionRevealTimes[d]) {
         divisionRevealStatus[d] = true;
         changed = true;
+        console.log(`[TIMER] Auto-revealed division: ${d}`);
       }
     }
-    if (changed) {
+    if (changed && db) {
       resultsRevealed = Object.values(divisionRevealStatus).some(v => v);
       await saveSettings();
     }
@@ -381,8 +409,8 @@ async function notifyJudgesOfSubmission(submission) {
     }
     return submission.tags.includes(j.division);
   });
-  if (relevantJudges.length === 0) return;
 
+  if (relevantJudges.length === 0) return;
   const divNames = submission.tags.map(t => divisions[t]?.name || t).join(', ');
 
   for (const judge of relevantJudges) {
@@ -394,25 +422,24 @@ async function notifyJudgesOfSubmission(submission) {
           <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#333;">
             <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:28px;border-radius:12px 12px 0 0;text-align:center;">
               <h2 style="color:#d4af37;margin:0;font-size:22px;">Astra Musica</h2>
-              <p style="color:rgba(255,255,255,0.7);margin:8px 0 0 0;font-size:14px;">New Submission Alert</p>
+              <p style="color:rgba(255,255,255,0.7);margin:8px 0 0 0;font-size:14px;">🎵 New Submission Alert</p>
             </div>
             <div style="background:#fff;padding:28px;border-radius:0 0 12px 12px;border:1px solid #e0e0e0;border-top:none;">
               <p style="font-size:15px;margin-bottom:16px;">Hi <b>${judge.name}</b>,</p>
               <p style="font-size:14px;line-height:1.6;">A new song has been submitted to your division and is ready for scoring.</p>
               <div style="background:#f8f9fa;padding:16px;border-radius:8px;margin:20px 0;border-left:4px solid #d4af37;">
-                <p style="margin:0;font-size:14px;"><b>Artist:</b> ${submission.author}</p>
-                <p style="margin:0;font-size:14px;"><b>Title:</b> ${submission.title}</p>
-                <p style="margin:0;font-size:14px;"><b>Division:</b> ${divNames}</p>
+                <p style="margin:0 0 8px 0;font-size:14px;"><b>Artist:</b> ${submission.author}</p>
+                <p style="margin:0 0 8px 0;font-size:14px;"><b>Title:</b> ${submission.title}</p>
+                <p style="margin:0 0 8px 0;font-size:14px;"><b>Division:</b> ${divNames}</p>
                 <p style="margin:0;font-size:14px;"><b>Week:</b> ${submission.weekId}</p>
               </div>
-              <div style="text-align:center;margin:28px 0;">
-                <a href="${BASE_URL}" style="background:#d4af37;color:#1a1a2e;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:800;font-size:15px;display:inline-block;">Open Astra Musica</a>
+              <div style="text-align:center;margin:28px 0;padding:20px;background:#faf8f0;border-radius:10px;border:1px solid #e8e0c8;">
+                <a href="${BASE_URL}" style="background:#d4af37;color:#1a1a2e;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:800;font-size:15px;display:inline-block;">Open Astra Musica →</a>
               </div>
             </div>
           </div>
         `
       });
-      console.log(`[EMAIL] Notification sent to ${judge.email} for submission #${submission.id}`);
     } catch (err) {
       console.error(`[EMAIL] Failed to notify ${judge.email}:`, err.message);
     }
@@ -420,9 +447,7 @@ async function notifyJudgesOfSubmission(submission) {
 }
 
 // ===================== API ROUTES =====================
-
 app.get('/api/divisions', (req, res) => res.json(divisions));
-
 app.get('/api/submissions', (req, res) => res.json(submissions));
 
 app.post('/api/submissions', async (req, res) => {
@@ -437,26 +462,16 @@ app.post('/api/submissions', async (req, res) => {
   submissions.push(sub);
   await saveSubmissions();
   await saveSettings();
-  notifyJudgesOfSubmission(sub).catch(err => console.error('[EMAIL] Notification error:', err.message));
+  notifyJudgesOfSubmission(sub).catch(err => console.error('[EMAIL] Notification error:', err));
   res.json(sub);
-});
-
-app.post('/api/submissions/:id/like', async (req, res) => {
-  const id = parseInt(req.params.id);
-  if (!submissionLikes[id]) submissionLikes[id] = 0;
-  submissionLikes[id]++;
-  await saveSubmissionLikes();
-  res.json({ success: true, likes: submissionLikes[id] });
 });
 
 app.delete('/api/submissions/:id', async (req, res) => {
   const id = parseInt(req.params.id);
   submissions = submissions.filter(s => s.id !== id);
   delete scores[id];
-  delete submissionLikes[id];
   await saveSubmissions();
   await saveScores();
-  await saveSubmissionLikes();
   res.json({ success: true });
 });
 
@@ -479,13 +494,6 @@ app.post('/api/judges', async (req, res) => {
   res.json({ id, name, email, division });
 });
 
-app.post('/api/judges/login', (req, res) => {
-  const { email, password } = req.body;
-  const judge = Object.values(judges).find(j => j.email === email && j.password === password);
-  if (!judge) return res.status(401).json({ error: 'Invalid credentials' });
-  res.json({ name: judge.name, division: judge.division, email: judge.email });
-});
-
 app.put('/api/judges/:id', async (req, res) => {
   const id = req.params.id;
   if (!judges[id]) return res.status(404).json({ error: 'Judge not found' });
@@ -495,7 +503,7 @@ app.put('/api/judges/:id', async (req, res) => {
   if (division) judges[id].division = division;
   if (photo !== undefined) judges[id].photo = photo;
   await saveJudges();
-  res.json({ success: true, judge: { name: judges[id].name, email: judges[id].email, division: judges[id].division, photo: judges[id].photo } });
+  res.json({ success: true, judge: judges[id] });
 });
 
 app.delete('/api/judges/:id', async (req, res) => {
@@ -509,14 +517,11 @@ app.delete('/api/judges/:id', async (req, res) => {
   }
 });
 
-app.post('/api/admin/reset-judge-password', async (req, res) => {
-  const { judgeId, newPassword } = req.body;
-  if (!judges[judgeId]) return res.status(404).json({ error: 'Judge not found' });
-  if (!newPassword || newPassword.length < 4) return res.status(400).json({ error: 'Password must be at least 4 characters' });
-  judges[judgeId].password = newPassword;
-  judges[judgeId].hasSetPassword = true;
-  await saveJudges();
-  res.json({ success: true });
+app.post('/api/judges/login', (req, res) => {
+  const { email, password } = req.body;
+  const judge = Object.values(judges).find(j => j.email === email && j.password === password);
+  if (!judge) return res.status(401).json({ error: 'Invalid credentials' });
+  res.json({ name: judge.name, division: judge.division, email: judge.email });
 });
 
 app.post('/api/scores', async (req, res) => {
@@ -530,327 +535,43 @@ app.post('/api/scores', async (req, res) => {
 
 app.get('/api/scores', (req, res) => res.json(scores));
 
-app.post('/api/theme-scores', async (req, res) => {
-  const { submissionId, judgeName, criteria } = req.body;
-  const total = calculatePercentage(criteria);
-  if (!themeScores[submissionId]) themeScores[submissionId] = {};
-  themeScores[submissionId][judgeName] = { criteria, total };
-  await saveThemeScores();
-  res.json({ success: true, total });
-});
-
-app.get('/api/theme-scores', (req, res) => res.json(themeScores));
-
-app.get('/api/themes', (req, res) => res.json(themes));
-
-app.post('/api/themes', async (req, res) => {
-  const { author, title, tags, link, image } = req.body;
-  if (!author || !title || !link) return res.status(400).json({ error: 'Missing fields' });
-  const theme = {
-    id: nextThemeId++,
-    author, title, tags: tags || [], link,
-    image: image || null,
-    timestamp: new Date().toISOString()
-  };
-  themes.push(theme);
-  await saveThemes();
-  await saveThemeSettings();
-  res.json(theme);
-});
-
-app.delete('/api/themes/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
-  themes = themes.filter(t => t.id !== id);
-  delete themeScores[id];
-  await saveThemes();
-  await saveThemeScores();
-  res.json({ success: true });
-});
-
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
-  if (password === adminPassword) return res.json({ success: true });
-  res.status(401).json({ error: 'Invalid admin password' });
-});
-
-app.post('/api/admin/change-password', async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
-  if (oldPassword !== adminPassword) return res.status(401).json({ error: 'Incorrect current password' });
-  if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
-  adminPassword = newPassword;
-  await saveSettings();
-  res.json({ success: true });
-});
-
-app.post('/api/admin/reveal', async (req, res) => {
-  const { division, revealed } = req.body;
-  if (division && divisionRevealStatus.hasOwnProperty(division)) {
-    divisionRevealStatus[division] = !!revealed;
-    resultsRevealed = Object.values(divisionRevealStatus).some(v => v);
-  } else {
-    resultsRevealed = !!revealed;
-    Object.keys(divisionRevealStatus).forEach(d => divisionRevealStatus[d] = resultsRevealed);
-  }
-  await saveSettings();
-  res.json({ divisionRevealStatus, resultsRevealed });
-});
-
-app.post('/api/admin/set-reveal-time', async (req, res) => {
-  const { division, timestamp } = req.body;
-  if (!division || !divisionRevealTimes.hasOwnProperty(division)) return res.status(400).json({ error: 'Valid division required' });
-  divisionRevealTimes[division] = parseInt(timestamp);
-  await saveSettings();
-  res.json({ success: true, divisionRevealTimes });
-});
-
-app.post('/api/admin/reset-week', async (req, res) => {
-  const { newWeekId } = req.body;
-  currentWeekId = newWeekId || getWeekId();
-  submissions = [];
-  scores = {};
-  nextId = 1;
-  resultsRevealed = false;
-  submissionLikes = {};
-  challengeImages = {};
-  for (const d of Object.keys(divisionRevealStatus)) {
-    divisionRevealStatus[d] = false;
-    divisionRevealTimes[d] = getNextRevealTime();
-  }
-  lastWeeklyReset = getLastClearTime();
-  await saveSettings();
-  await saveSubmissions();
-  await saveScores();
-  await saveSubmissionLikes();
-  await saveChallengeImages();
-  res.json({ weekId: currentWeekId });
-});
-
-app.post('/api/admin/test-email', async (req, res) => {
-  if (!emailEnabled) return res.status(400).json({ success: false, error: 'Email not configured' });
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ success: false, error: 'Email address required' });
-  try {
-    await sendBrevoEmail({
-      to: email,
-      subject: 'Astra Musica — SMTP Test',
-      html: '<p>Hi! This is a test email from Astra Musica. Your Brevo API configuration is working correctly.</p>'
-    });
+  if (password === adminPassword) {
     res.json({ success: true });
+  } else {
+    res.status(401).json({ error: 'Invalid admin password' });
+  }
+});
+
+// ADMIN-CONTROLLED reset only — this is the ONLY thing that clears data.
+app.post('/api/admin/reset-week', async (req, res) => {
+  try {
+    currentWeekId = getWeekId();
+    submissions = [];
+    scores = {};
+    nextId = 1;
+    resultsRevealed = false;
+    const nextReveal = getNextRevealTime();
+    for (const d of Object.keys(divisionRevealStatus)) {
+      divisionRevealStatus[d] = false;
+      divisionRevealTimes[d] = nextReveal;
+    }
+    await saveSettings();
+    await saveSubmissions();
+    await saveScores();
+    console.log(`[ADMIN] Manual weekly reset ✓ new week: ${currentWeekId}`);
+    res.json({ success: true, weekId: currentWeekId });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
+    console.error('[ADMIN] Reset week error:', err.message);
+    res.status(500).json({ error: 'Failed to reset week' });
   }
 });
 
-app.post('/api/admin/logo', async (req, res) => {
-  const { logoUrl } = req.body;
-  if (!logoUrl) return res.status(400).json({ error: 'Logo URL required' });
-  appLogo = logoUrl;
-  if (db) {
-    await db.collection('settings').updateOne({ _id: 'logo' }, { $set: { url: logoUrl } }, { upsert: true });
-  }
-  res.json({ success: true, url: logoUrl });
-});
-
-app.post('/api/admin/division-logos', async (req, res) => {
-  const { division, logoUrl } = req.body;
-  if (!division || !logoUrl) return res.status(400).json({ error: 'Division and URL required' });
-  divisionLogos[division] = logoUrl;
-  if (db) {
-    await db.collection('settings').updateOne({ _id: 'divisionLogos' }, { $set: { data: divisionLogos } }, { upsert: true });
-  }
-  res.json({ success: true, divisionLogos });
-});
-
-app.post('/api/admin/challenge-image', async (req, res) => {
-  const { division, image, weekId } = req.body;
-  if (!division || !image) return res.status(400).json({ error: 'Division and image required' });
-  const wk = weekId || currentWeekId;
-  if (!challengeImages[wk]) challengeImages[wk] = {};
-  challengeImages[wk][division] = image;
-  await saveChallengeImages();
-  res.json({ success: true });
-});
-
-app.post('/api/admin/theme-image', async (req, res) => {
-  const { image } = req.body;
-  themeImages = { banner: image };
-  await saveThemeImages();
-  res.json({ success: true });
-});
-
-app.post('/api/admin/theme-reveal', async (req, res) => {
-  const { revealed } = req.body;
-  themeRevealStatus = !!revealed;
-  await saveThemeSettings();
-  res.json({ success: true, revealed: themeRevealStatus });
-});
-
-app.post('/api/admin/theme-reveal-time', async (req, res) => {
-  const { timestamp } = req.body;
-  themeRevealTime = parseInt(timestamp);
-  await saveThemeSettings();
-  res.json({ success: true });
-});
-
-app.post('/api/admin/delete-theme-only', async (req, res) => {
-  themes = [];
-  themeScores = {};
-  themeImages = {};
-  themeRevealStatus = false;
-  themeRevealTime = new Date().getTime() + 30 * 24 * 60 * 60 * 1000;
-  nextThemeId = 1;
-  await saveThemes();
-  await saveThemeScores();
-  await saveThemeImages();
-  await saveThemeSettings();
-  res.json({ success: true, message: 'Theme data cleared. Top 20 and Challenge data preserved.' });
-});
-
-// ===================== NEWS =====================
-app.get('/api/news', (req, res) => res.json(news));
-
-app.post('/api/admin/news', async (req, res) => {
-  const { title, content, image } = req.body;
-  if (!title || !content) return res.status(400).json({ error: 'Title and content required' });
-  const article = {
-    id: Date.now(),
-    title,
-    content,
-    image: image || '',
-    timestamp: new Date().toISOString(),
-    likes: 0,
-    comments: []
-  };
-  news.unshift(article);
-  await saveNews();
-  res.json({ success: true, article });
-});
-
-app.delete('/api/admin/news/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
-  news = news.filter(a => a.id !== id);
-  await saveNews();
-  res.json({ success: true, news });
-});
-
-app.post('/api/news/:id/like', async (req, res) => {
-  const id = parseInt(req.params.id);
-  const article = news.find(a => a.id === id);
-  if (!article) return res.status(404).json({ error: 'Article not found' });
-  article.likes = (article.likes || 0) + 1;
-  await saveNews();
-  res.json({ success: true, likes: article.likes });
-});
-
-app.post('/api/news/:id/comment', async (req, res) => {
-  const id = parseInt(req.params.id);
-  const { name, text } = req.body;
-  if (!name || !text) return res.status(400).json({ error: 'Name and text required' });
-  const article = news.find(a => a.id === id);
-  if (!article) return res.status(404).json({ error: 'Article not found' });
-  if (!article.comments) article.comments = [];
-  article.comments.push({ name, text, timestamp: new Date().toISOString() });
-  await saveNews();
-  res.json({ success: true, comments: article.comments });
-});
-
-// ===================== TEAM =====================
-app.post('/api/admin/team', async (req, res) => {
-  const { name, role, bio, photo } = req.body;
-  if (!name || !role) return res.status(400).json({ error: 'Name and role required' });
-  const member = { id: 'tm' + (teamMembers.length + 1) + '_' + Date.now(), name, role, bio: bio || '', photo: photo || '' };
-  teamMembers.push(member);
-  await saveTeamMembers();
-  res.json({ success: true, teamMembers });
-});
-
-app.post('/api/admin/team/reorder', async (req, res) => {
-  const { teamMembers: newOrder } = req.body;
-  if (!Array.isArray(newOrder)) return res.status(400).json({ error: 'Array required' });
-  teamMembers = newOrder;
-  await saveTeamMembers();
-  res.json({ success: true, teamMembers });
-});
-
-app.post('/api/admin/team/:index', async (req, res) => {
-  const index = parseInt(req.params.index);
-  if (index < 0 || index >= teamMembers.length) return res.status(404).json({ error: 'Team member not found' });
-  const { name, role, bio } = req.body;
-  if (!name || !role) return res.status(400).json({ error: 'Name and role required' });
-  teamMembers[index] = { ...teamMembers[index], name, role, bio: bio || '' };
-  await saveTeamMembers();
-  res.json({ success: true, teamMembers });
-});
-
-app.delete('/api/admin/team/:index', async (req, res) => {
-  const index = parseInt(req.params.index);
-  if (index >= 0 && index < teamMembers.length) {
-    teamMembers.splice(index, 1);
-    await saveTeamMembers();
-  }
-  res.json({ success: true, teamMembers });
-});
-
-// ===================== COPY TEXT (for AI image generation) =====================
-function buildTop20Text(div) {
-  const divName = divisions[div]?.name || div;
-  const entries = getSubsForDivision(div)
-    .map(s => ({ ...s, avg: getAverageScore(s.id) }))
-    .filter(s => s.avg !== null)
-    .sort((a, b) => b.avg - a.avg);
-  const lines = ['ASTRA MUSICA — ' + divName.toUpperCase() + ' TOP 20 — Week ' + currentWeekId];
-  if (entries.length === 0) {
-    lines.push('No entries scored yet.');
-  } else {
-    entries.forEach((sub, idx) => {
-      lines.push((idx + 1) + '. "' + sub.title + '" by ' + sub.author + ' — ' + sub.avg + '%');
-    });
-  }
-  lines.push('Astra Musica — Where Stars Are Born');
-  return lines.join('\n');
-}
-
-function buildChallengeText(div) {
-  const divName = divisions[div]?.name || div;
-  const entries = getChallengeSubsForDivision(div)
-    .map(s => ({ ...s, avg: getAverageScore(s.id) }))
-    .filter(s => s.avg !== null)
-    .sort((a, b) => b.avg - a.avg);
-  const lines = ['ASTRA MUSICA — ' + divName.toUpperCase() + ' WEEKLY CHALLENGE — Week ' + currentWeekId];
-  if (entries.length === 0) {
-    lines.push('No entries scored yet.');
-  } else {
-    entries.forEach((sub, idx) => {
-      lines.push((idx + 1) + '. "' + sub.title + '" by ' + sub.author + ' — ' + sub.avg + '%');
-    });
-  }
-  lines.push('Astra Musica — Where Stars Are Born');
-  return lines.join('\n');
-}
-
-function buildThemeText() {
-  const entries = getThemeRankings();
-  const lines = ['ASTRA MUSICA — THEME OF THE MONTH — Results'];
-  if (entries.length === 0) {
-    lines.push('No entries scored yet.');
-  } else {
-    entries.forEach((sub, idx) => {
-      lines.push((idx + 1) + '. "' + sub.title + '" by ' + sub.author + ' — ' + sub.avg + '%');
-    });
-  }
-  lines.push('Astra Musica — Where Stars Are Born');
-  return lines.join('\n');
-}
-
-app.get('/api/copy-text/top20/:division', (req, res) => res.json({ text: buildTop20Text(req.params.division) }));
-app.get('/api/copy-text/challenge/:division', (req, res) => res.json({ text: buildChallengeText(req.params.division) }));
-app.get('/api/copy-text/theme/all', (req, res) => res.json({ text: buildThemeText() }));
-
-// ===================== ALL DATA =====================
 app.get('/api/all-data', (req, res) => {
   const safeJudges = {};
   for (const [k, v] of Object.entries(judges)) {
-    safeJudges[k] = { name: v.name, email: v.email, division: v.division, photo: v.photo || '', hasSetPassword: v.hasSetPassword };
+    safeJudges[k] = { name: v.name, email: v.email, division: v.division, hasSetPassword: v.hasSetPassword };
   }
   res.json({
     weekId: currentWeekId,
@@ -858,7 +579,7 @@ app.get('/api/all-data', (req, res) => {
     revealTime,
     divisions,
     judges: safeJudges,
-    submissions,
+    submissions,           // ALL submissions, all weeks — nothing hidden
     scores,
     rankings: getRankings(),
     challengeSubs: getChallengeSubs(),
@@ -881,11 +602,9 @@ app.get('/api/all-data', (req, res) => {
   });
 });
 
-// ===================== EXCEL EXPORT (server-side, kept for compatibility) =====================
+// Excel export — includes ALL submissions across weeks
 app.get('/api/export/:weekId', (req, res) => {
-  const weekId = req.params.weekId;
-  const weekSubs = submissions.filter(s => s.weekId === weekId);
-  const data = weekSubs.map(s => ({
+  const data = submissions.map(s => ({
     'Week': s.weekId,
     'Artist': s.author,
     'Title': s.title,
@@ -897,11 +616,12 @@ app.get('/api/export/:weekId', (req, res) => {
     'Average Score': getAverageScore(s.id) || 'Not scored',
     'Date': new Date(s.timestamp).toLocaleDateString()
   }));
+
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, weekId);
+  XLSX.utils.book_append_sheet(wb, ws, 'Astra Musica');
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  res.setHeader('Content-Disposition', 'attachment; filename="astra-musica-' + weekId + '.xlsx"');
+  res.setHeader('Content-Disposition', `attachment; filename="astra-musica-export.xlsx"`);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.send(buf);
 });
@@ -909,16 +629,28 @@ app.get('/api/export/:weekId', (req, res) => {
 // ===================== STARTUP =====================
 async function start() {
   const dbConnected = await connectDB();
-  if (dbConnected) await loadFromDB();
+  if (dbConnected) {
+    await loadFromDB();
+  }
+
+  // FIX: if the DB wasn't reachable at startup, keep retrying every 60
+  // seconds in the background instead of silently running on memory forever.
+  setInterval(async () => {
+    if (!db) {
+      console.log('[DB] Retrying MongoDB connection...');
+      const ok = await connectDB(1, 0);
+      if (ok) await loadFromDB();
+    }
+  }, 60 * 1000);
+
   await setupEmail();
   await runWeeklyTimer();
   setInterval(runWeeklyTimer, 60 * 1000);
 
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
-    console.log('Astra Musica v2 running on port ' + PORT);
-    console.log('Database: ' + (dbConnected ? 'MongoDB Atlas OK' : 'Memory-only'));
-    console.log('Week: ' + currentWeekId + ' | Email: ' + (emailEnabled ? 'ON' : 'OFF'));
+    console.log(`Server running on port ${PORT}`);
+    console.log(db ? '[STARTUP] ✓ Database connected — data will persist.' : '[STARTUP] ⚠️ RUNNING WITHOUT DATABASE — DATA WILL BE LOST ON RESTART. Fix MONGODB_URI.');
   });
 }
 

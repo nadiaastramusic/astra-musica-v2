@@ -101,10 +101,9 @@ function getThemeAverageScore(subId) {
   return Math.round(all.reduce(function(a, b) { return a + b; }, 0) / all.length);
 }
 
-function getRankings(weekId) {
-  weekId = weekId || currentWeekId;
+function getRankings() {
+  // Week filter removed: ALL submissions stay visible until admin resets.
   return submissions
-    .filter(function(s) { return s.weekId === weekId; })
     .map(function(s) { return Object.assign({}, s, { avg: getAverageScore(s.id) }); })
     .filter(function(s) { return s.avg !== null; })
     .sort(function(a, b) { return b.avg - a.avg; });
@@ -117,11 +116,11 @@ function getThemeRankings() {
     .sort(function(a, b) { return b.avg - a.avg; });
 }
 
-function getChallengeSubs(weekId) {
-  weekId = weekId || currentWeekId;
+function getChallengeSubs() {
+  // Week filter removed: challenge entries stay visible until admin resets.
   const seen = new Set();
   return submissions.filter(function(s) {
-    if (s.weekId !== weekId || s.entryType !== 'challenge') return false;
+    if (s.entryType !== 'challenge') return false;
     const key = s.author + '-' + (s.challengeDivision || (s.tags ? s.tags[0] : ''));
     if (seen.has(key)) return false;
     seen.add(key);
@@ -129,18 +128,18 @@ function getChallengeSubs(weekId) {
   });
 }
 
-function getSubsForDivision(div, weekId) {
-  weekId = weekId || currentWeekId;
-  let subs = submissions.filter(function(s) { return s.weekId === weekId; });
+function getSubsForDivision(div) {
+  // Week filter removed: songs stay visible forever until admin resets.
+  let subs = submissions;
   if (div === 'gospelpraise') {
     return subs.filter(function(s) { return s.tags && (s.tags.indexOf('gospel') !== -1 || s.tags.indexOf('praiseandworship') !== -1); });
   }
   return subs.filter(function(s) { return s.tags && s.tags.indexOf(div) !== -1; });
 }
 
-function getJudgeQueue(div, weekId) {
-  weekId = weekId || currentWeekId;
-  let subs = submissions.filter(function(s) { return s.weekId === weekId; });
+function getJudgeQueue(div) {
+  // Week filter removed: judges see all songs until admin resets.
+  let subs = submissions;
   if (div === 'gospelpraise') {
     return subs.filter(function(s) { return s.tags && s.tags.indexOf(currentGospelSubTab) !== -1; });
   }
@@ -679,6 +678,18 @@ async function saveThemeScore(subId) {
   toast('Theme score saved!');
 }
 
+// Looks up the challenge banner for a division across ALL weeks
+// (newest first), so the banner never disappears after a week rolls over.
+function getChallengeImage(div) {
+  if (!challengeImages) return null;
+  const weeks = Object.keys(challengeImages).sort();
+  for (let i = weeks.length - 1; i >= 0; i--) {
+    const wk = challengeImages[weeks[i]];
+    if (wk && wk[div]) return wk[div];
+  }
+  return null;
+}
+
 // ===================== PUBLIC VIEW =====================
 function setPublicTab(tab) {
   publicTab = tab;
@@ -798,7 +809,7 @@ function renderChallenges() {
     const revealTs = divisionRevealTimes[div] || revealTime;
     const divChals = getChallengeSubs().filter(function(c) { return c.challengeDivision === div || (c.tags && c.tags.indexOf(div) !== -1); });
     const ranked = divChals.map(function(s) { return Object.assign({}, s, { avg: getAverageScore(s.id) }); }).filter(function(s) { return s.avg !== null; }).sort(function(a, b) { return b.avg - a.avg; });
-    const img = challengeImages[currentWeekId] ? challengeImages[currentWeekId][div] : null;
+    const img = getChallengeImage(div);
 
     html += '<div style="margin-top:24px;padding:16px;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.05);">';
     html += '<h2 style="color:' + divColor + ';font-size:18px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">' + divisions[div].name + ' Challenge' + (isRevealed ? ' <span style="font-size:12px;background:rgba(107,255,107,0.15);color:#6bff6b;padding:2px 10px;border-radius:12px;">✓ Results Revealed</span>' : '') + '</h2>';
@@ -1401,7 +1412,7 @@ function renderAdminChallenges() {
   const divColor = divisions[div].color;
   const allChals = getChallengeSubs().filter(function(c) { return c.challengeDivision === div || (c.tags && c.tags.indexOf(div) !== -1); });
   const ranked = allChals.map(function(s) { return Object.assign({}, s, { avg: getAverageScore(s.id) }); }).filter(function(s) { return s.avg !== null; }).sort(function(a, b) { return b.avg - a.avg; });
-  const img = challengeImages[currentWeekId] ? challengeImages[currentWeekId][div] : null;
+  const img = getChallengeImage(div);
 
   let html = '<div style="margin-bottom:16px;">';
   html += '<h2 style="color:' + divColor + ';font-size:18px;margin-bottom:10px;">' + divisions[div].name + ' Challenge</h2>';
