@@ -1021,6 +1021,56 @@ async function syncAstraData() {
     }
 
     renderAstraData();
+// Rankings (Grouped by Division + Overall)
+  const rankingsDiv = document.getElementById('astra-rankings');
+  if (astraData.rankings && astraData.rankings.length > 0) {
+    document.getElementById('astra-rankings-card').style.display = 'block';
+    
+    // Group rankings by division tags
+    const divisions = { english: 'English', afrikaans: 'Afrikaans', gospel: 'Gospel', praiseandworship: 'Praise & Worship' };
+    let htmlContent = '';
+
+    // Overall Combined Rankings
+    htmlContent += `<div style="font-weight:700;color:#1F4E78;margin:10px 0 6px;font-size:14px">🏆 Overall Combined Top Rankings</div>`;
+    htmlContent += astraData.rankings.slice(0, 10).map((r, i) => {
+      const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-other';
+      return `
+        <div class="chart-row">
+          <div class="chart-rank ${rankClass}">${i + 1}</div>
+          <div style="flex:1">
+            <div style="font-weight:600">${r.title}</div>
+            <div style="font-size:12px;color:#64748b">${r.author} · ${r.tags?.join(', ') || ''}</div>
+          </div>
+          <div style="width:60px;text-align:center;font-weight:700;font-size:18px;color:#1F4E78">${r.avg}%</div>
+        </div>
+      `;
+    }).join('');
+
+    // Division-Specific Rankings for Weekly Certificates
+    Object.entries(divisions).forEach(([tag, label]) => {
+      const divRankings = astraData.rankings.filter(r => r.tags?.includes(tag));
+      if (divRankings.length > 0) {
+        htmlContent += `<div style="font-weight:700;color:#1F4E78;margin:16px 0 6px;font-size:14px">🎯 Division: ${label} (Top 3 for Certificates)</div>`;
+        htmlContent += divRankings.slice(0, 3).map((r, i) => {
+          const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : 'rank-3';
+          return `
+            <div class="chart-row" style="background:#f8fafc;border-left:4px solid ${i===0?'#FFD700':i===1?'#C0C0C0':'#CD7F32'}">
+              <div class="chart-rank ${rankClass}">${i + 1}</div>
+              <div style="flex:1">
+                <div style="font-weight:600">${r.title}</div>
+                <div style="font-size:12px;color:#64748b">${r.author}</div>
+              </div>
+              <div style="width:60px;text-align:center;font-weight:700;font-size:16px;color:#16a34a">${r.avg}%</div>
+            </div>
+          `;
+        }).join('');
+      }
+    });
+
+    rankingsDiv.innerHTML = htmlContent;
+  } else {
+    document.getElementById('astra-rankings-card').style.display = 'none';
+  }
     statusDiv.innerHTML = '<span style="color:#16a34a">✅ Synced! Week ' + astraData.weekId + ' loaded.</span>';
     toast('Astra Musica data synced!');
   } catch (err) {
