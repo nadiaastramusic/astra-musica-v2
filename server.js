@@ -626,6 +626,275 @@ app.get('/api/export/:weekId', (req, res) => {
   res.send(buf);
 });
 
+// ===================== THEME ROUTES (Admin adds, judges score) =====================
+// Admin adds theme songs (with division tag) — judging is per-division on the frontend.
+app.post('/api/themes', async (req, res) => {
+  const { author, title, link, tags, image } = req.body;
+  if (!author || !title || !link) {
+    return res.status(400).json({ error: 'Artist name, title and link are required' });
+  }
+  const theme = {
+    id: nextThemeId++,
+    author: String(author).slice(0, 100),
+    title: String(title).slice(0, 150),
+    link: String(link),
+    tags: Array.isArray(tags) ? tags.map(t => String(t)) : [],
+    image: image || null,
+    timestamp: new Date().toISOString()
+  };
+  themes.push(theme);
+  await saveThemes();
+  await saveThemeSettings();
+  res.json({ success: true, id: theme.id, themes });
+});
+
+// Admin deletes a theme song (also cleans up its scores).
+app.delete('/api/themes/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  themes = themes.filter(t => t.id !== id);
+  delete themeScores[id];
+  await saveThemes();
+  await saveThemeScores();
+  res.json({ success: true });
+});
+
+// Judges read/write theme scores (same pattern as /api/scores).
+app.get('/api/theme-scores', (req, res) => res.json(themeScores));
+
+app.post('/api/theme-scores', async (req, res) => {
+  const { submissionId, judgeName, criteria } = req.body;
+  if (submissionId === undefined || !judgeName || !Array.isArray(criteria)) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
+  const total = calculatePercentage(criteria);
+  if (!themeScores[submissionId]) themeScores[submissionId] = {};
+  themeScores[submissionId][judgeName] = { criteria, total };
+  await saveThemeScores();
+  res.json({ success: true, total });
+});
+
+// Admin uploads the theme banner image.
+app.post('/api/admin/theme-image', async (req, res) => {
+  const { image } = req.body;
+  if (!image) return res.status(400).json({ error: 'No image provided' });
+  themeImages.banner = image;
+  await saveThemeImages();
+  res.json({ success: true });
+});
+
+// Admin reveals / hides theme results.
+app.post('/api/admin/theme-reveal', async (req, res) => {
+  themeRevealStatus = !!req.body.revealed;
+  await saveThemeSettings();
+  res.json({ success: true, revealed: themeRevealStatus });
+});
+
+// Admin sets the theme reveal time.
+app.post('/api/admin/theme-reveal-time', async (req, res) => {
+  const ts = Number(req.body.timestamp);
+  if (!ts) return res.status(400).json({ error: 'Invalid timestamp' });
+  themeRevealTime = ts;
+  await saveThemeSettings();
+  res.json({ success: true });
+});
+
+// Admin clears ONLY theme data (Top 20 & Challenges preserved).
+app.post('/api/admin/delete-theme-only', async (req, res) => {
+  themes = [];
+  themeScores = {};
+  await saveThemes();
+  await saveThemeScores();
+  res.json({ success: true });
+});
+
+// ===================== ROUTES FOR THE NEWER FRONTEND =====================
+// Judge editing — the frontend sends POST, this mirrors the PUT route above.
+app.post('/api/judges/:id', async (req, res) => {
+  const id = req.params.id;
+  if (!judges[id]) return res.status(404).json({ error: 'Judge not found' });
+  const { name, email, division, photo } = req.body;
+  if (name) judges[id].name = name;
+  if (email) judges[id].email = email;
+  if (division) judges[id].division = division;
+  if (photo !== undefined) judges[id].photo = photo;
+  await saveJudges();
+  res.json({ success: true, judge: judges[id] });
+});
+
+app.post('/api/admin/reset-judge-password', async (req, res) => {
+  const { judgeId, newPassword } = req.body;
+  if (!judges[judgeId]) return res.status(404).json({ error: 'Judge not found' });
+  if (!newPassword || newPassword.length < 4) return res.status(400).json({ error: 'Password must be at least 4 characters' });
+  judges[judgeId].password = newPassword;
+  judges[judgeId].hasSetPassword = true;
+  await saveJudges();
+  res.json({ success: true });
+});
+
+app.post('/api/admin/change-password', async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (oldPassword !== adminPassword) return res.status(401).json({ error: 'Current password is incorrect' });
+  if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  adminPassword = newPassword;
+  await saveSettings();
+  res.json({ success: true });
+});
+
+// Public like button on Top 20.
+app.post('/api/submissions/:id/like', async (req, res) => {
+  const id = parseInt(req.params.id);
+  submissionLikes[id] = (submissionLikes[id] || 0) + 1;
+  await saveSubmissionLikes();
+  res.json({ likes: submissionLikes[id] });
+});
+
+// Main logo.
+app.post('/api/admin/logo', async (req, res) => {
+  const { logoUrl } = req.body;
+  if (!logoUrl) return res.status(400).json({ error: 'No logo URL provided' });
+  appLogo = logoUrl;
+  if (db) await db.collection('settings').updateOne({ _id: 'logo' }, { $set: { url: appLogo } }, { upsert: true });
+  res.json({ success: true });
+});
+
+// Per-division logos.
+app.post('/api/admin/division-logos', async (req, res) => {
+  const { division, logoUrl } = req.body;
+  if (!division) return res.status(400).json({ error: 'Division is required' });
+  if (logoUrl) divisionLogos[division] = logoUrl;
+  else delete divisionLogos[division];
+  await saveDivisionLogos();
+  res.json({ success: true });
+});
+
+// Challenge banners: challengeImages[weekId][division] = image.
+app.post('/api/admin/challenge-image', async (req, res) => {
+  const { division, image, weekId } = req.body;
+  if (!division || !image) return res.status(400).json({ error: 'Division and image are required' });
+  const wk = weekId || currentWeekId;
+  if (!challengeImages[wk]) challengeImages[wk] = {};
+  challengeImages[wk][division] = image;
+  await saveChallengeImages();
+  res.json({ success: true });
+});
+
+// Per-division reveal / hide buttons.
+app.post('/api/admin/reveal', async (req, res) => {
+  const { division, revealed } = req.body;
+  if (!division || !(division in divisionRevealStatus)) return res.status(400).json({ error: 'Unknown division' });
+  divisionRevealStatus[division] = !!revealed;
+  resultsRevealed = Object.values(divisionRevealStatus).some(v => v);
+  await saveSettings();
+  res.json({ success: true });
+});
+
+// Per-division reveal countdown times.
+app.post('/api/admin/set-reveal-time', async (req, res) => {
+  const { division, timestamp } = req.body;
+  if (!division || !(division in divisionRevealTimes)) return res.status(400).json({ error: 'Unknown division' });
+  divisionRevealTimes[division] = Number(timestamp) || revealTime;
+  await saveSettings();
+  res.json({ success: true });
+});
+
+// Team members — NOTE: /reorder must be registered BEFORE /:idx.
+app.post('/api/admin/team', async (req, res) => {
+  const { name, role, bio, photo } = req.body;
+  if (!name || !role) return res.status(400).json({ error: 'Name and role are required' });
+  teamMembers.push({ name, role, bio: bio || '', photo: photo || '' });
+  await saveTeamMembers();
+  res.json({ success: true, teamMembers });
+});
+
+app.post('/api/admin/team/reorder', async (req, res) => {
+  if (Array.isArray(req.body.teamMembers)) {
+    teamMembers = req.body.teamMembers;
+    await saveTeamMembers();
+  }
+  res.json({ success: true, teamMembers });
+});
+
+app.post('/api/admin/team/:idx', async (req, res) => {
+  const idx = parseInt(req.params.idx);
+  if (!teamMembers[idx]) return res.status(404).json({ error: 'Team member not found' });
+  const { name, role, bio } = req.body;
+  if (name) teamMembers[idx].name = name;
+  if (role) teamMembers[idx].role = role;
+  if (bio !== undefined) teamMembers[idx].bio = bio;
+  await saveTeamMembers();
+  res.json({ success: true, teamMembers });
+});
+
+app.delete('/api/admin/team/:index', async (req, res) => {
+  const idx = parseInt(req.params.index);
+  if (idx < 0 || idx >= teamMembers.length) return res.status(404).json({ error: 'Team member not found' });
+  teamMembers.splice(idx, 1);
+  await saveTeamMembers();
+  res.json({ success: true, teamMembers });
+});
+
+// News: publish / delete / like / comment.
+app.post('/api/admin/news', async (req, res) => {
+  const { title, content, image } = req.body;
+  if (!title || !content) return res.status(400).json({ error: 'Headline and content are required' });
+  news.unshift({
+    id: Date.now(),
+    title: String(title).slice(0, 200),
+    content: String(content),
+    image: image || null,
+    timestamp: new Date().toISOString(),
+    likes: 0,
+    comments: []
+  });
+  await saveNews();
+  res.json({ success: true, news });
+});
+
+app.delete('/api/admin/news/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  news = news.filter(a => a.id !== id);
+  await saveNews();
+  res.json({ success: true, news });
+});
+
+app.post('/api/news/:id/like', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const article = news.find(a => a.id === id);
+  if (!article) return res.status(404).json({ error: 'Article not found' });
+  article.likes = (article.likes || 0) + 1;
+  await saveNews();
+  res.json({ success: true, likes: article.likes });
+});
+
+app.post('/api/news/:id/comment', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const article = news.find(a => a.id === id);
+  if (!article) return res.status(404).json({ error: 'Article not found' });
+  const { name, text } = req.body;
+  if (!name || !text) return res.status(400).json({ error: 'Name and comment are required' });
+  if (!article.comments) article.comments = [];
+  article.comments.push({ name: String(name).slice(0, 60), text: String(text).slice(0, 500) });
+  await saveNews();
+  res.json({ success: true });
+});
+
+// Test email (Brevo).
+app.post('/api/admin/test-email', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email address is required' });
+  if (!emailEnabled) return res.status(400).json({ error: 'Email is not configured on the server (no Brevo API key set)' });
+  try {
+    await sendBrevoEmail({
+      to: email,
+      subject: 'Astra Musica — Test Email',
+      html: '<p>✅ Your Astra Musica email notifications are working!</p>'
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to send: ' + err.message });
+  }
+});
+
 // ===================== STARTUP =====================
 async function start() {
   const dbConnected = await connectDB();

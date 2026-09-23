@@ -54,6 +54,7 @@ let dragSrcIndex = null;
 let themes = [];
 let themeScores = {};
 let themeImages = {};
+let publicThemeDiv = 'all';
 let themeRevealStatus = false;
 let themeRevealTime = new Date().getTime() + 30 * 24 * 60 * 60 * 1000;
 let nextRevealTime = new Date().getTime();
@@ -563,6 +564,8 @@ function renderJudgeThemes() {
   let divSubs = themes;
   if (currentJudge.division === 'gospelpraise') {
     divSubs = themes.filter(function(s) { return s.tags && s.tags.indexOf(currentGospelSubTab) !== -1; });
+  } else if (currentJudge.division === 'english' || currentJudge.division === 'afrikaans' || currentJudge.division === 'liveartists') {
+    divSubs = themes.filter(function(s) { return s.tags && s.tags.indexOf(currentJudge.division) !== -1; });
   }
   if (divSubs.length === 0) {
     container.innerHTML = '<p class="text-center text-tertiary" style="padding:40px;font-size:16px;">No theme submissions available for your division right now.</p>';
@@ -771,7 +774,6 @@ function renderTop20() {
       html += '</div>';
     }
     html += '</div>';
-    html += '<button onclick="copyTop20Text(\'' + div + '\')" style="width:100%;padding:10px;background:rgba(212,175,55,0.1);border:1px solid ' + divColor + ';border-radius:8px;color:' + divColor + ';font-weight:700;cursor:pointer;font-size:13px;margin-bottom:12px;margin-top:8px;">📋 Copy ' + divisions[div].name + ' Top 20 for AI Image</button>';
     if (div === 'gospelpraise') {
       const purple = divisions.gospelpraise.color;
       html += '<div style="display:flex;gap:8px;margin:12px 0;">' +
@@ -815,7 +817,6 @@ function renderChallenges() {
     html += '<h2 style="color:' + divColor + ';font-size:18px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">' + divisions[div].name + ' Challenge' + (isRevealed ? ' <span style="font-size:12px;background:rgba(107,255,107,0.15);color:#6bff6b;padding:2px 10px;border-radius:12px;">✓ Results Revealed</span>' : '') + '</h2>';
     if (img) html += '<img src="' + img + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:14px;">';
 
-    html += '<button onclick="copyChallengeText(\'' + div + '\')" style="width:100%;padding:10px;background:rgba(212,175,55,0.1);border:1px solid ' + divColor + ';border-radius:8px;color:' + divColor + ';font-weight:700;cursor:pointer;font-size:13px;margin-bottom:12px;">📋 Copy ' + divisions[div].name + ' Challenge for AI Image</button>';
 
     if (!isRevealed) {
       const diff = revealTs - Date.now();
@@ -935,18 +936,33 @@ function renderResults() {
   show('resultsContent');
 }
 
+function setPublicThemeDiv(div) {
+  publicThemeDiv = div;
+  renderPublicThemes();
+}
+
 function renderPublicThemes() {
   const container = $('publicThemesList');
   if (!container) return;
 
   const isRevealed = themeRevealStatus;
   const revealTs = themeRevealTime;
-  const ranked = getThemeRankings();
+  const rankedAll = getThemeRankings();
   const img = themeImages.banner;
+
+  const themeDivs = [
+    { key: 'english', name: 'English', color: divisions.english.color },
+    { key: 'afrikaans', name: 'Afrikaans', color: divisions.afrikaans.color },
+    { key: 'gospel', name: 'Gospel', color: '#9b6dc4' },
+    { key: 'praiseandworship', name: 'Praise & Worship', color: '#9b6dc4' },
+    { key: 'liveartists', name: 'Live Artists', color: divisions.liveartists.color }
+  ];
 
   let html = '<div style="margin-top:16px;">';
   html += '<h2 style="color:var(--brand-gold);font-size:20px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">🎭 Theme of the Month' + (isRevealed ? ' <span style="font-size:12px;background:rgba(107,255,107,0.15);color:#6bff6b;padding:2px 10px;border-radius:12px;">✓ Results Revealed</span>' : '') + '</h2>';
   if (img) html += '<img src="' + img + '" style="width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin-bottom:14px;">';
+
+
 
   if (!isRevealed) {
     const diff = revealTs - Date.now();
@@ -964,81 +980,144 @@ function renderPublicThemes() {
       '</div></div>';
   }
 
-  html += '<button onclick="copyThemeText()" style="width:100%;padding:12px;background:rgba(212,175,55,0.15);border:1px solid var(--brand-gold);border-radius:8px;color:var(--brand-gold);font-weight:700;cursor:pointer;font-size:14px;margin-bottom:16px;">📋 Copy Theme Results for AI Image</button>';
+  // Division sub-tabs
+  html += '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">' +
+    '<button onclick="setPublicThemeDiv(\'all\')" style="padding:8px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:' + (publicThemeDiv === 'all' ? 'var(--brand-gold)' : 'rgba(0,0,0,0.3)') + ';color:' + (publicThemeDiv === 'all' ? '#1a1a2e' : 'rgba(255,255,255,0.6)') + ';font-weight:700;cursor:pointer;font-size:13px;">All Divisions</button>';
+  themeDivs.forEach(function(d) {
+    const active = publicThemeDiv === d.key;
+    html += '<button onclick="setPublicThemeDiv(\'' + d.key + '\')" style="padding:8px 16px;border-radius:8px;border:1px solid ' + d.color + ';background:' + (active ? d.color : 'rgba(0,0,0,0.3)') + ';color:' + (active ? '#fff' : d.color) + ';font-weight:700;cursor:pointer;font-size:13px;">' + d.name + '</button>';
+  });
+  html += '</div>';
 
-  if (themes.length === 0) {
-    html += '<p style="font-size:13px;color:rgba(255,255,255,0.4);padding:20px;">No theme submissions yet.</p>';
-  } else if (isRevealed && ranked.length > 0) {
-    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">';
-    [1,0,2].forEach(function(pos) {
-      const sub = ranked[pos];
-      if (!sub) return;
-      const isFirst = pos === 0;
-      html += '<div style="background:' + (isFirst ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.03)') + ';padding:14px;border-radius:10px;text-align:center;border:1px solid ' + (isFirst ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.05)') + ';' + (isFirst ? 'transform:scale(1.05);' : '') + '">' +
-        '<div style="font-size:28px;margin-bottom:4px;">' + (isFirst ? '🥇' : pos === 1 ? '🥈' : '🥉') + '</div>' +
-        '<div style="font-weight:700;font-size:14px;color:white;margin-bottom:2px;">' + sub.title + '</div>' +
-        '<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:6px;">by ' + sub.author + '</div>' +
-        '<div style="font-size:20px;font-weight:800;color:var(--brand-gold);">' + sub.avg + '%</div>' +
-        '</div>';
-    });
+  let anyShown = false;
+  themeDivs.forEach(function(d) {
+    if (publicThemeDiv !== 'all' && publicThemeDiv !== d.key) return;
+    const divThemes = themes.filter(function(s) { return s.tags && s.tags.indexOf(d.key) !== -1; });
+    if (divThemes.length === 0) {
+      if (publicThemeDiv === d.key) html += '<p style="font-size:13px;color:rgba(255,255,255,0.4);padding:16px;">No theme submissions in ' + d.name + ' yet — be the first!</p>';
+      return;
+    }
+    anyShown = true;
+    const ranked = rankedAll.filter(function(r) { return r.tags && r.tags.indexOf(d.key) !== -1; });
+
+    html += '<div style="margin-bottom:20px;padding:16px;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.05);">';
+    html += '<h2 style="color:' + d.color + ';font-size:17px;margin-bottom:12px;">🎭 ' + d.name + ' Themes</h2>';
+
+    if (isRevealed && ranked.length > 0) {
+      html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">';
+      [1,0,2].forEach(function(pos) {
+        const sub = ranked[pos];
+        if (!sub) return;
+        const isFirst = pos === 0;
+        html += '<div style="background:' + (isFirst ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.03)') + ';padding:14px;border-radius:10px;text-align:center;border:1px solid ' + (isFirst ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.05)') + ';' + (isFirst ? 'transform:scale(1.05);' : '') + '">' +
+          '<div style="font-size:28px;margin-bottom:4px;">' + (isFirst ? '🥇' : pos === 1 ? '🥈' : '🥉') + '</div>' +
+          '<div style="font-weight:700;font-size:14px;color:white;margin-bottom:2px;">' + sub.title + '</div>' +
+          '<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:6px;">by ' + sub.author + '</div>' +
+          '<div style="font-size:20px;font-weight:800;color:var(--brand-gold);">' + sub.avg + '%</div>' +
+          '</div>';
+      });
+      html += '</div>';
+      html += ranked.map(function(sub, idx) {
+        return '<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;border-left:3px solid ' + d.color + ';">' +
+          '<div style="display:flex;align-items:center;gap:12px;">' +
+          '<div style="font-weight:800;color:' + (idx < 3 ? 'var(--brand-gold)' : 'rgba(255,255,255,0.4)') + ';width:28px;">#' + (idx + 1) + '</div>' +
+          (sub.image ? '<img src="' + sub.image + '" style="width:40px;height:40px;object-fit:cover;border-radius:6px;">' : '') +
+          '<div><div style="font-weight:700;font-size:14px;color:white;">' + sub.title + '</div><div style="font-size:12px;color:rgba(255,255,255,0.5);">by ' + sub.author + '</div></div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<div style="font-weight:800;font-size:16px;color:var(--brand-gold);">' + sub.avg + '%</div>' +
+          '</div></div>';
+      }).join('');
+    } else {
+      html += divThemes.map(function(sub) {
+        return '<div class="card" style="border-left:4px solid ' + d.color + ';margin-bottom:10px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+          '<div style="display:flex;align-items:center;gap:12px;min-width:0;">' +
+          (sub.image ? '<img src="' + sub.image + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">' : '') +
+          '<div><div style="font-weight:700;font-size:16px;">' + sub.title + '</div><div style="font-size:13px;color:rgba(255,255,255,0.6);">by ' + sub.author + '</div></div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
+          '<a href="' + sub.link + '" target="_blank" style="padding:6px 12px;background:var(--brand-gold);color:#1a1a2e;text-decoration:none;font-weight:700;border-radius:6px;font-size:12px;">Play</a>' +
+          '</div>' +
+          '</div></div>';
+      }).join('');
+    }
     html += '</div>';
-    html += ranked.map(function(sub, idx) {
-      return '<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;border-left:3px solid var(--brand-gold);">' +
-        '<div style="display:flex;align-items:center;gap:12px;">' +
-        '<div style="font-weight:800;color:' + (idx < 3 ? 'var(--brand-gold)' : 'rgba(255,255,255,0.4)') + ';width:28px;">#' + (idx + 1) + '</div>' +
-        (sub.image ? '<img src="' + sub.image + '" style="width:40px;height:40px;object-fit:cover;border-radius:6px;">' : '') +
-        '<div><div style="font-weight:700;font-size:14px;color:white;">' + sub.title + '</div><div style="font-size:12px;color:rgba(255,255,255,0.5);">by ' + sub.author + '</div></div>' +
-        '</div>' +
-        '<div style="font-weight:800;font-size:16px;color:var(--brand-gold);">' + sub.avg + '%</div>' +
-        '</div>';
-    }).join('');
-  } else {
-    html += themes.map(function(sub) {
-      return '<div class="card" style="border-left:4px solid var(--brand-gold);margin-bottom:10px;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-        '<div><div style="font-weight:700;font-size:16px;">' + sub.title + '</div><div style="font-size:13px;color:rgba(255,255,255,0.6);">by ' + sub.author + '</div></div>' +
-        '<a href="' + sub.link + '" target="_blank" style="padding:6px 12px;background:var(--brand-gold);color:#1a1a2e;text-decoration:none;font-weight:700;border-radius:6px;font-size:12px;">Play</a>' +
-        '</div></div>';
-    }).join('');
+  });
+
+  if (!anyShown && publicThemeDiv === 'all') {
+    html += '<p style="font-size:13px;color:rgba(255,255,255,0.4);padding:20px;">No theme submissions yet — check back soon!</p>';
   }
   html += '</div>';
   container.innerHTML = html;
 }
 
+// ===================== COPY RANKING TEXT (ADMIN ONLY, no backend needed) =====================
+function buildRankingText(heading, ranked) {
+  const medals = ['🥇', '🥈', '🥉'];
+  let text = '🏆 ' + heading + ' 🏆\n\n';
+  ranked.forEach(function(sub, i) {
+    const prefix = i < 3 ? medals[i] : (i + 1) + '.';
+    text += prefix + ' ' + sub.title + ' — ' + sub.author + ' (' + sub.avg + '%)\n';
+  });
+  text += '\n🎵 Astra Musica\n#AstraMusica';
+  return text;
+}
+
+async function copyTextToClipboard(text, msg) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(msg);
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast(msg); }
+    catch (e2) { toast('Copy failed. Please try again.', 'error'); }
+    document.body.removeChild(ta);
+  }
+}
+
+function getRankingsForDivision(div) {
+  if (div === 'gospelpraise') {
+    return getRankings().filter(function(s) { return s.tags && (s.tags.indexOf('gospel') !== -1 || s.tags.indexOf('praiseandworship') !== -1); });
+  }
+  return getRankings().filter(function(s) { return s.tags && s.tags.indexOf(div) !== -1; });
+}
+
+async function copyDivisionRanking(div) {
+  const ranked = getRankingsForDivision(div);
+  const divName = divisions[div] ? divisions[div].name : div;
+  if (!ranked.length) { toast('No scores available for ' + divName + ' yet.', 'error'); return; }
+  await copyTextToClipboard(buildRankingText('ASTRA MUSICA — ' + divName.toUpperCase() + ' FINAL RESULTS', ranked), '📋 ' + divName + ' ranking copied! Paste it into your AI image tool.');
+}
+
+async function copyChallengeRanking(div) {
+  const divName = divisions[div] ? divisions[div].name : div;
+  const ranked = getChallengeSubs().filter(function(c) { return c.challengeDivision === div || (c.tags && c.tags.indexOf(div) !== -1); })
+    .map(function(s) { return Object.assign({}, s, { avg: getAverageScore(s.id) }); })
+    .filter(function(s) { return s.avg !== null; })
+    .sort(function(a, b) { return b.avg - a.avg; });
+  if (!ranked.length) { toast('No scored challenge entries for ' + divName + ' yet.', 'error'); return; }
+  await copyTextToClipboard(buildRankingText('ASTRA MUSICA — ' + divName.toUpperCase() + ' CHALLENGE RESULTS', ranked), '📋 ' + divName + ' challenge ranking copied!');
+}
+
 async function copyThemeText() {
-  try {
-    const res = await apiGet('/api/copy-text/theme/all');
-    await navigator.clipboard.writeText(res.text);
-    toast('📋 Theme results copied! Paste into your AI image generator.');
-  } catch (e) {
-    toast('Copy failed. Try again.', 'error');
-  }
-}
-
-async function copyTop20Text(div) {
-  try {
-    const res = await apiGet('/api/copy-text/top20/' + div);
-    await navigator.clipboard.writeText(res.text);
-    toast('📋 ' + (divisions[div]?.name || div) + ' Top 20 copied!');
-  } catch (e) {
-    toast('Copy failed. Try again.', 'error');
-  }
-}
-
-async function copyChallengeText(div) {
-  try {
-    const res = await apiGet('/api/copy-text/challenge/' + div);
-    await navigator.clipboard.writeText(res.text);
-    toast('📋 ' + (divisions[div]?.name || div) + ' Challenge copied!');
-  } catch (e) {
-    toast('Copy failed. Try again.', 'error');
-  }
+  const ranked = getThemeRankings();
+  if (!ranked.length) { toast('No scored theme submissions yet.', 'error'); return; }
+  await copyTextToClipboard(buildRankingText('ASTRA MUSICA — THEME OF THE MONTH RESULTS', ranked), '📋 Theme results copied! Paste into your AI image generator.');
 }
 
 function updateCountdown() {
   if (publicTab === 'challenges') renderChallenges();
   if (publicTab === 'results') renderResults();
-  if (publicTab === 'themes') renderPublicThemes();
+  if (publicTab === 'themes') {
+    const pt = $('publicThemesList');
+    if (!pt || !pt.contains(document.activeElement)) renderPublicThemes();
+  }
 
   const now = Date.now();
   const diff = nextRevealTime - now;
@@ -1315,6 +1394,7 @@ function renderAdminResults() {
           '<button class="btn btn-secondary" onclick="hideDivisionResults(\'' + div + '\')" style="padding:6px 14px;font-size:12px;">🔒 Hide</button>' :
           '<button class="btn btn-gold" onclick="revealDivisionResults(\'' + div + '\')" style="padding:6px 14px;font-size:12px;">🔓 Reveal Now</button>'
         ) +
+        '<button class="btn btn-secondary" onclick="copyDivisionRanking(\'' + div + '\')" style="padding:6px 14px;font-size:12px;margin-top:8px;width:100%;">📋 Copy Ranking for AI Image</button>' +
         '</div></div>';
     }).join('');
   }
@@ -1416,6 +1496,7 @@ function renderAdminChallenges() {
 
   let html = '<div style="margin-bottom:16px;">';
   html += '<h2 style="color:' + divColor + ';font-size:18px;margin-bottom:10px;">' + divisions[div].name + ' Challenge</h2>';
+  html += '<button onclick="copyChallengeRanking(\'' + div + '\')" style="width:100%;padding:10px;background:rgba(212,175,55,0.1);border:1px solid ' + divColor + ';border-radius:8px;color:' + divColor + ';font-weight:700;cursor:pointer;font-size:13px;margin-bottom:12px;">📋 Copy Challenge Ranking for AI Image</button>';
   if (img) html += '<img src="' + img + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:14px;">';
 
   if (allChals.length === 0) {
@@ -1560,7 +1641,8 @@ function renderAdminThemes() {
     '<div class="form-group"><label>Artist Name</label><input type="text" id="themeAuthor" placeholder="e.g. John D."></div>' +
     '<div class="form-group"><label>Song Title</label><input type="text" id="themeTitle" placeholder="e.g. Broken Chains"></div>' +
     '<div class="form-group full"><label>Song Link</label><input type="url" id="themeLink" placeholder="https://..."></div>' +
-    '<div class="form-group full"><label>Hashtags (space separated)</label><input type="text" id="themeTags" placeholder="#english #gospel"></div>' +
+    '<div class="form-group"><label>Division *</label><select id="themeDiv"><option value="english">English</option><option value="afrikaans">Afrikaans</option><option value="gospel">Gospel</option><option value="praiseandworship">Praise & Worship</option><option value="liveartists">Live Artists</option></select></div>' +
+    '<div class="form-group"><label>Hashtags (optional)</label><input type="text" id="themeTags" placeholder="#english #gospel"></div>' +
     '<div class="form-group full"><label>Cover Image (optional)</label><input type="file" id="themeImage" accept="image/*"><img id="themeImagePreview" style="display:none;max-width:120px;border-radius:8px;margin-top:8px;"></div>' +
     '<div class="form-group full"><button class="btn btn-gold" onclick="addThemeSubmission()">➕ Save Theme Submission</button></div>' +
     '</div></div>';
@@ -1625,11 +1707,13 @@ async function addThemeSubmission() {
     return;
   }
   let tags = tagsRaw.split(' ').map(function(t) { return t.replace('#', ''); }).filter(Boolean);
+  const themeDivTag = $('themeDiv') ? $('themeDiv').value : '';
+  if (themeDivTag && tags.indexOf(themeDivTag) === -1) tags.push(themeDivTag);
   let image = '';
   if (imageInput && imageInput.files && imageInput.files[0]) {
     image = await fileToBase64(imageInput.files[0]);
   }
-  const res = await apiPost('/api/themes', { author, title, link, tags, image });
+  const res = await apiPost('/api/themes', { author, title, link, tags, image, deleteCode: 'ADMIN' + Date.now() });
   if (res.error) { toast(res.error, 'error'); return; }
   toast('Theme submission added!');
   $('themeAuthor').value = ''; $('themeTitle').value = ''; $('themeLink').value = ''; $('themeTags').value = '';
