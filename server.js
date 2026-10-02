@@ -4,6 +4,8 @@ const path = require('path');
 const axios = require('axios');
 const XLSX = require('xlsx');
 const { MongoClient } = require('mongodb');
+const { mediaView, resolveMedia, parseImage, imageVersion } = require('./media');
+const { gzip } = require('zlib');
 
 const app = express();
 
@@ -26,6 +28,22 @@ app.use((req, res, next) => {
   next();
 });
 
+// Compress large JSON responses without caching another copy of application state.
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (value) => {
+    if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return originalJson(value);
+    const body = JSON.stringify(value);
+    if (Buffer.byteLength(body) < 1024) return originalJson(value);
+    res.vary('Accept-Encoding');
+    gzip(body, (err, compressed) => {
+      if (err) return originalJson(value);
+      res.set('Content-Encoding', 'gzip').type('application/json').send(compressed);
+    });
+    return res;
+  };
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -446,6 +464,22 @@ async function notifyJudgesOfSubmission(submission) {
   }
 }
 
+function mediaSources() {
+  return { submissions, judges, challengeImages, divisionLogos, teamMembers,
+    appLogo, news, themes, themeImages };
+}
+
+app.get('/api/media', (req, res) => {
+  let parts;
+  try { parts = JSON.parse(req.query.path); } catch { return res.sendStatus(400); }
+  const value = resolveMedia(mediaSources(), req.query.bucket, parts);
+  if (!value || req.query.v !== imageVersion(value)) return res.sendStatus(404);
+  const image = parseImage(value);
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.type(image.type).send(Buffer.from(image.body, 'base64'));
+});
+
 // ===================== API ROUTES =====================
 app.get('/api/divisions', (req, res) => res.json(divisions));
 app.get('/api/submissions', (req, res) => res.json(submissions));
@@ -478,7 +512,7 @@ app.delete('/api/submissions/:id', async (req, res) => {
 app.get('/api/judges', (req, res) => {
   const safe = {};
   for (const [k, v] of Object.entries(judges)) {
-    safe[k] = { name: v.name, email: v.email, division: v.division, photo: v.photo || '', hasSetPassword: v.hasSetPassword };
+    safe[k] = { name: v.name, email: v.email, division: v.division, photo: mediaView(v.photo || '', 'judges', [k, 'photo']), hasSetPassword: v.hasSetPassword };
   }
   res.json(safe);
 });
@@ -573,28 +607,30 @@ app.get('/api/all-data', (req, res) => {
   for (const [k, v] of Object.entries(judges)) {
     safeJudges[k] = { name: v.name, email: v.email, division: v.division, hasSetPassword: v.hasSetPassword };
   }
+  const visibleSubs = mediaView(submissions, 'submissions');
+  const visibleThemes = mediaView(themes, 'themes');
   res.json({
     weekId: currentWeekId,
     resultsRevealed,
     revealTime,
     divisions,
     judges: safeJudges,
-    submissions,           // ALL submissions, all weeks — nothing hidden
+    submissions: visibleSubs,
     scores,
-    rankings: getRankings(),
-    challengeSubs: getChallengeSubs(),
-    challengeImages,
-    divisionLogos,
-    teamMembers,
+    rankings: visibleSubs.map(s => ({ ...s, avg: getAverageScore(s.id) })).filter(s => s.avg !== null).sort((a, b) => b.avg - a.avg),
+    challengeSubs: getChallengeSubs().map(s => visibleSubs.find(v => v.id === s.id)),
+    challengeImages: mediaView(challengeImages, 'challengeImages'),
+    divisionLogos: mediaView(divisionLogos, 'divisionLogos'),
+    teamMembers: mediaView(teamMembers, 'teamMembers'),
     divisionRevealStatus,
     divisionRevealTimes,
     emailEnabled,
-    mainLogo: appLogo,
-    news,
+    mainLogo: mediaView(appLogo, 'appLogo'),
+    news: mediaView(news, 'news'),
     submissionLikes,
-    themes,
+    themes: visibleThemes,
     themeScores,
-    themeImages,
+    themeImages: mediaView(themeImages, 'themeImages'),
     themeRevealStatus,
     themeRevealTime,
     nextRevealTime: getNextRevealTime(),

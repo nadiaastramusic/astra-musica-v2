@@ -1002,6 +1002,14 @@ async function syncAstraData() {
     const res = await fetch(url + '/api/all-data');
     if (!res.ok) throw new Error('Server returned ' + res.status);
     astraData = await res.json();
+    // Cached image URLs are relative to the competition site, not this local file.
+    function resolveImageUrls(value) {
+      if (typeof value === 'string' && value.startsWith('/api/media?')) return new URL(value, url).href;
+      if (Array.isArray(value)) return value.map(resolveImageUrls);
+      if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolveImageUrls(v)]));
+      return value;
+    }
+    astraData = resolveImageUrls(astraData);
 
     // Store locally for persistence — strip base64 images to stay under localStorage quota
     const slimAstra = JSON.parse(JSON.stringify(astraData));

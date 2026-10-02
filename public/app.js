@@ -79,9 +79,30 @@ function toast(msg, type) {
 
 function fileToBase64(file) {
   return new Promise(function(resolve, reject) {
+    if (!file || !/^image\//.test(file.type)) return reject(new Error('Please choose an image.'));
     const reader = new FileReader();
-    reader.onload = function() { resolve(reader.result); };
-    reader.onerror = function(error) { reject(error); };
+    reader.onerror = reject;
+    reader.onload = function() {
+      // Preserve animated GIFs, but prevent oversized uploads.
+      if (file.type === 'image/gif') {
+        if (file.size > 1024 * 1024) return reject(new Error('Choose a GIF smaller than 1 MB.'));
+        return resolve(reader.result);
+      }
+      const image = new Image();
+      image.onerror = function() { reject(new Error('This image could not be opened.')); };
+      image.onload = function() {
+        const scale = Math.min(1, 1200 / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+        // WebP preserves transparency for logos as well as compressing photographs.
+        const result = canvas.toDataURL('image/webp', 0.82);
+        if (result.length > 1400000) return reject(new Error('Please choose a smaller image.'));
+        resolve(result);
+      };
+      image.src = reader.result;
+    };
     reader.readAsDataURL(file);
   });
 }
